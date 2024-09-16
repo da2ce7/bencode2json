@@ -82,7 +82,18 @@ impl<R: Read> BencodeParser<R> {
 
                 //println!("utf8 string: {string}");
 
-                self.output.push_str(string);
+                self.output.push_str(&format!("\"{string}\""));
+            }
+            b'l' => {
+                self.output.push('[');
+
+                self.parse()?;
+
+                self.output.push(']');
+            }
+            b'e' => {
+                // End of integer, list or dictionary
+                // Do nothing
             }
             /*
             b'l' => {}
@@ -93,7 +104,7 @@ impl<R: Read> BencodeParser<R> {
                 // Ignore New Line byte (NL)
             }
              */
-            _ => panic!("Unknown token"),
+            _ => panic!("Unknown token {byte}"),
         }
 
         Ok(self.output.clone())
@@ -129,27 +140,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_utf8_string() {
-        let data = b"4:spam";
-        let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(result, "spam".to_string());
-    }
-
-    #[test]
-    fn test_non_utf8_string() {
-        let data = b"4:\xFF\xFE\xFD\xFC";
-        let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(result, "<hex>fffefdfc</hex>".to_string());
-    }
-
-    #[test]
-    fn test_integer() {
+    fn integer() {
         let data = b"i42e";
         let mut parser = BencodeParser::new(&data[..]);
         let result = parser.parse().unwrap();
         assert_eq!(result, "42".to_string());
+    }
+
+    #[test]
+    fn utf8_string() {
+        let data = b"4:spam";
+        let mut parser = BencodeParser::new(&data[..]);
+        let result = parser.parse().unwrap();
+        assert_eq!(result, "\"spam\"".to_string());
+    }
+
+    #[test]
+    fn non_utf8_string() {
+        let data = b"4:\xFF\xFE\xFD\xFC";
+        let mut parser = BencodeParser::new(&data[..]);
+        let result = parser.parse().unwrap();
+        assert_eq!(result, "\"<hex>fffefdfc</hex>\"".to_string());
+    }
+
+    mod lists {
+        use crate::BencodeParser;
+
+        #[test]
+        fn empty_list() {
+            let data = b"le";
+            let mut parser = BencodeParser::new(&data[..]);
+            let result = parser.parse().unwrap();
+            assert_eq!(result, "[]".to_string());
+        }
+
+        #[test]
+        fn with_one_integer() {
+            let data = b"li42ee";
+            let mut parser = BencodeParser::new(&data[..]);
+            let result = parser.parse().unwrap();
+            assert_eq!(result, "[42]".to_string());
+        }
+
+        #[test]
+        fn with_one_utf8_string() {
+            let data = b"l4:spame";
+            let mut parser = BencodeParser::new(&data[..]);
+            let result = parser.parse().unwrap();
+            assert_eq!(result, "[\"spam\"]".to_string());
+        }
     }
 
     /* Not implemented

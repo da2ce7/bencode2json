@@ -9,6 +9,9 @@ fn test_from_file() {
         .arg("output.json")
         .assert()
         .success();
+
+    // todo: check contents
+    // Read the file. It should contain: l4:spame
 }
 
 #[test]
@@ -17,5 +20,5 @@ fn test_stdin_stdout() {
     cmd.write_stdin("4:spam")
         .assert()
         .success()
-        .stdout("spam\n");
+        .stdout("\"spam\"\n");
 }
