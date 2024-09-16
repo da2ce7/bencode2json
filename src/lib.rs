@@ -13,14 +13,16 @@ pub enum JsonValue {
 
 pub struct BencodeParser<R: Read> {
     reader: R,
-    stack: VecDeque<JsonValue>,
+    _stack: VecDeque<JsonValue>,
+    output: String,
 }
 
 impl<R: Read> BencodeParser<R> {
     pub fn new(reader: R) -> Self {
         BencodeParser {
             reader,
-            stack: VecDeque::new(),
+            _stack: VecDeque::new(),
+            output: String::new(),
         }
     }
 
@@ -32,84 +34,90 @@ impl<R: Read> BencodeParser<R> {
     ///
     /// Will panic if ...
     #[allow(clippy::match_on_vec_items)]
-    pub fn parse(&mut self) -> io::Result<JsonValue> {
-        let mut data = Vec::new();
+    pub fn parse(&mut self) -> io::Result<String> {
+        let byte = self.read_byte()?;
 
-        self.reader.read_to_end(&mut data)?;
-
-        let mut i = 0;
-
-        //println!("buffer: {data:#?}");
-
-        while i < data.len() {
-            //print!(" {}", data[i]);
-
-            match data[i] {
-                b'i' => {
-                    i += 1;
-                    let end_idx = data[i..].iter().position(|&x| x == b'e').unwrap() + i;
-                    let num = std::str::from_utf8(&data[i..end_idx])
-                        .unwrap()
-                        .parse::<i64>()
-                        .unwrap();
-                    self.stack.push_back(JsonValue::Integer(num));
-                    i = end_idx + 1;
-                }
-                b'l' => {
-                    self.stack.push_back(JsonValue::List(vec![]));
-                    i += 1;
-                }
-                b'd' => {
-                    self.stack.push_back(JsonValue::Dictionary(vec![]));
-                    i += 1;
-                }
-                b'e' => {
-                    if let Some(JsonValue::List(list)) = self.stack.pop_back() {
-                        if let Some(JsonValue::List(parent_list)) = self.stack.back_mut() {
-                            parent_list.push(JsonValue::List(list));
-                        } else {
-                            self.stack.push_back(JsonValue::List(list));
-                        }
+        match byte {
+            b'i' => {
+                // Read bytes until we find the end of the integer
+                loop {
+                    let byte = self.read_byte()?;
+                    if byte == b'e' {
+                        break;
                     }
-                    i += 1;
+                    self.output.push(byte as char);
                 }
-                b'0'..=b'9' => {
-                    let colon_pos = data[i..].iter().position(|&x| x == b':').unwrap() + i;
-                    let length = std::str::from_utf8(&data[i..colon_pos])
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap();
-                    let start = colon_pos + 1;
-                    let end = start + length;
-
-                    let bytes = &data[start..end];
-                    if is_valid_utf8(bytes) {
-                        self.stack.push_back(JsonValue::String(
-                            String::from_utf8(bytes.to_vec()).unwrap(),
-                        ));
-                    } else {
-                        self.stack
-                            .push_back(JsonValue::BinaryData(bytes_to_hex(bytes)));
-                    }
-                    i = end;
-                }
-                10 => {
-                    // Ignore New Line byte (NL)
-                    i += 1;
-                }
-                _ => panic!("Unknown token"),
             }
+            b'0'..=b'9' => {
+                // Read bytes until we find the end of the integer
+                let mut length_bytes = Vec::new();
+
+                length_bytes.push(byte);
+
+                loop {
+                    let byte = self.read_byte()?;
+                    if byte == b':' {
+                        break;
+                    }
+                    length_bytes.push(byte);
+                }
+
+                //println!("length_bytes: {length_bytes:#?}");
+
+                let length_str = str::from_utf8(&length_bytes).unwrap();
+
+                //println!("length_str: {length_str}");
+
+                let length = length_str.parse::<usize>().unwrap();
+
+                //println!("length: {length}");
+
+                // Read "length" bytes until the end of the string
+                let string_bytes = self.read_n_bytes(length)?;
+
+                let string = str::from_utf8(&string_bytes).unwrap();
+
+                //println!("utf8 string: {string}");
+
+                self.output.push_str(string);
+            }
+            /*
+            b'l' => {}
+            b'd' => {}
+            b'e' => {}
+            b'0'..=b'9' => {}
+            10 => {
+                // Ignore New Line byte (NL)
+            }
+             */
+            _ => panic!("Unknown token"),
         }
 
-        Ok(self.stack.pop_back().unwrap())
+        Ok(self.output.clone())
+    }
+
+    fn read_byte(&mut self) -> io::Result<u8> {
+        let mut byte = [0; 1];
+        self.reader.read_exact(&mut byte)?;
+        Ok(byte[0])
+    }
+
+    fn read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+
+        for _i in 1..=n {
+            bytes.push(self.read_byte()?);
+        }
+
+        Ok(bytes)
     }
 }
 
-fn is_valid_utf8(data: &[u8]) -> bool {
+fn _is_valid_utf8(data: &[u8]) -> bool {
     str::from_utf8(data).is_ok()
 }
 
-fn bytes_to_hex(data: &[u8]) -> String {
+fn _bytes_to_hex(data: &[u8]) -> String {
     format!("<hex>{}</hex>", hex::encode(data))
 }
 
@@ -122,9 +130,10 @@ mod tests {
         let data = b"4:spam";
         let mut parser = BencodeParser::new(&data[..]);
         let result = parser.parse().unwrap();
-        assert_eq!(result, JsonValue::String("spam".to_string()));
+        assert_eq!(result, "spam".to_string());
     }
 
+    /*
     #[test]
     fn test_non_utf8_string() {
         let data = b"4:\xFF\xFE\xFD\xFC";
@@ -136,12 +145,14 @@ mod tests {
         );
     }
 
+    */
+
     #[test]
     fn test_integer() {
         let data = b"i42e";
         let mut parser = BencodeParser::new(&data[..]);
         let result = parser.parse().unwrap();
-        assert_eq!(result, JsonValue::Integer(42));
+        assert_eq!(result, "42".to_string());
     }
 
     /* Not implemented

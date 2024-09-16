@@ -17,5 +17,5 @@ fn test_stdin_stdout() {
     cmd.write_stdin("4:spam")
         .assert()
         .success()
-        .stdout("String(\"spam\")\n");
+        .stdout("spam\n");
 }

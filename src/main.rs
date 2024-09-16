@@ -41,10 +41,10 @@ fn main() -> io::Result<()> {
 
     // Create a BencodeParser and convert to JSON
     let mut parser = BencodeParser::new(input);
-    let json_value = parser.parse()?; // Call parse method here
+    let json = parser.parse()?; // Call parse method here
 
     // Write the JSON value to the output
-    writeln!(output, "{json_value:?}")?;
+    writeln!(output, "{json}")?;
 
     Ok(())
 }
