@@ -75,7 +75,10 @@ impl<R: Read> BencodeParser<R> {
                 // Read "length" bytes until the end of the string
                 let string_bytes = self.read_n_bytes(length)?;
 
-                let string = str::from_utf8(&string_bytes).unwrap();
+                let string = match str::from_utf8(&string_bytes) {
+                    Ok(string) => string,
+                    Err(_) => &bytes_to_hex(&string_bytes),
+                };
 
                 //println!("utf8 string: {string}");
 
@@ -117,7 +120,7 @@ fn _is_valid_utf8(data: &[u8]) -> bool {
     str::from_utf8(data).is_ok()
 }
 
-fn _bytes_to_hex(data: &[u8]) -> String {
+fn bytes_to_hex(data: &[u8]) -> String {
     format!("<hex>{}</hex>", hex::encode(data))
 }
 
@@ -133,19 +136,13 @@ mod tests {
         assert_eq!(result, "spam".to_string());
     }
 
-    /*
     #[test]
     fn test_non_utf8_string() {
         let data = b"4:\xFF\xFE\xFD\xFC";
         let mut parser = BencodeParser::new(&data[..]);
         let result = parser.parse().unwrap();
-        assert_eq!(
-            result,
-            JsonValue::BinaryData("<hex>fffefdfc</hex>".to_string())
-        );
+        assert_eq!(result, "<hex>fffefdfc</hex>".to_string());
     }
-
-    */
 
     #[test]
     fn test_integer() {
