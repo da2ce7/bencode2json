@@ -563,6 +563,20 @@ mod tests {
                 assert_eq!(parser.json, "[[]]".to_string());
             }
 
+            #[test]
+            fn two_nested_empty_lists() {
+                // List with one UTF8 string: llleee
+                //   1   2   3   4   5   6 (pos)
+                //   l   l   l   e   e   e (byte)
+                // 108 108 108 101 101 101 (byte decimal)
+
+                let data = b"llleee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "[[[]]]".to_string());
+            }
+
             /* todo:
                 - With one list (nested lists)
                 - With one dictionary
