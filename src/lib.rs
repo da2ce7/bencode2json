@@ -132,14 +132,12 @@ impl<R: Read> BencodeParser<R> {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &format!(
-                                                    "<hex>{}</hex>",
-                                                    bytes_to_hex(&string_bytes)
-                                                )
+                                                &bytes_to_hex(&string_bytes)
                                             }
                                         };
 
-                                        self.output.push_str(string);
+                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.stack.pop();
                                     }
                                 }
                             },
@@ -169,14 +167,12 @@ impl<R: Read> BencodeParser<R> {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &format!(
-                                                    "<hex>{}</hex>",
-                                                    bytes_to_hex(&string_bytes)
-                                                )
+                                                &bytes_to_hex(&string_bytes)
                                             }
                                         };
 
-                                        self.output.push_str(string);
+                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.stack.pop();
                                     }
                                 }
                             },
@@ -242,6 +238,10 @@ impl<R: Read> BencodeParser<R> {
 
                                     string_length = length_str.parse::<usize>().unwrap();
                                     println!("string_length_number: {string_length}");
+
+                                    self.stack.pop();
+                                    self.stack
+                                        .push(State::ParsingString(ParsingString::ParsingChars));
                                 }
                                 ParsingString::ParsingChars => {
                                     string_bytes.push(byte);
@@ -253,14 +253,11 @@ impl<R: Read> BencodeParser<R> {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &format!(
-                                                    "<hex>{}</hex>",
-                                                    bytes_to_hex(&string_bytes)
-                                                )
+                                                &bytes_to_hex(&string_bytes)
                                             }
                                         };
 
-                                        self.output.push_str(string);
+                                        self.output.push_str(&format!("\"{string}\""));
                                     }
                                 }
                             }
@@ -298,14 +295,11 @@ impl<R: Read> BencodeParser<R> {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &format!(
-                                                    "<hex>{}</hex>",
-                                                    bytes_to_hex(&string_bytes)
-                                                )
+                                                &bytes_to_hex(&string_bytes)
                                             }
                                         };
 
-                                        self.output.push_str(string);
+                                        self.output.push_str(&format!("\"{string}\""));
                                     }
                                 }
                             },
@@ -345,14 +339,11 @@ impl<R: Read> BencodeParser<R> {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &format!(
-                                                    "<hex>{}</hex>",
-                                                    bytes_to_hex(&string_bytes)
-                                                )
+                                                &bytes_to_hex(&string_bytes)
                                             }
                                         };
 
-                                        self.output.push_str(string);
+                                        self.output.push_str(&format!("\"{string}\""));
                                         self.stack.pop();
                                     }
                                 }
@@ -386,7 +377,37 @@ impl<R: Read> BencodeParser<R> {
                     // Ignore New Line byte (NL)
                 }
                  */
-                _ => panic!("Unknown token {byte}"),
+                _ => {
+                    match self.stack.last() {
+                        Some(head) => match head {
+                            State::ParsingList(_) => {}
+                            State::ParsingDictionary(_) => {}
+                            State::ParsingInteger => {}
+                            State::ParsingString(parsing_string) => match parsing_string {
+                                ParsingString::ParsingLength => {}
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing parsing the integer
+
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &bytes_to_hex(&string_bytes)
+                                            }
+                                        };
+
+                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.stack.pop();
+                                    }
+                                }
+                            },
+                        },
+                        None => {}
+                    }
+                }
             }
 
             iter += 1;
@@ -402,7 +423,7 @@ impl<R: Read> BencodeParser<R> {
         Ok(byte[0])
     }
 
-    fn read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+    fn _read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
         let mut bytes = Vec::new();
 
         for _i in 1..=n {
