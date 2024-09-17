@@ -476,6 +476,7 @@ mod tests {
         #[test]
         fn utf8() {
             let data = b"4:spam";
+
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
@@ -485,6 +486,7 @@ mod tests {
         #[test]
         fn non_utf8() {
             let data = b"4:\xFF\xFE\xFD\xFC";
+
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
@@ -503,6 +505,7 @@ mod tests {
         #[test]
         fn empty_list() {
             let data = b"le";
+
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
@@ -515,6 +518,7 @@ mod tests {
             #[test]
             fn integer() {
                 let data = b"li42ee";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -529,6 +533,7 @@ mod tests {
                 // 108  52  58 115 112  97 109 101 (byte decimal)
 
                 let data = b"l4:spame";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -543,42 +548,72 @@ mod tests {
                 // 108  52  58 255 254 253 252 101 (byte decimal)
 
                 let data = b"l4:\xFF\xFE\xFD\xFCe";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
                 assert_eq!(parser.json, "[\"<hex>fffefdfc</hex>\"]".to_string());
             }
 
-            #[test]
-            fn nested_empty_list() {
-                // List with one UTF8 string: llee
-                //   1   2   3   4 (pos)
-                //   l   l   e   e (byte)
-                // 108 108 101 101 (byte decimal)
+            mod of_type_list {
+                use crate::BencodeParser;
 
-                let data = b"llee";
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
+                #[test]
+                fn nested_empty_list() {
+                    // List with one empty list: llee
+                    //   1   2   3   4 (pos)
+                    //   l   l   e   e (byte)
+                    // 108 108 101 101 (byte decimal)
 
-                assert_eq!(parser.json, "[[]]".to_string());
-            }
+                    let data = b"llee";
 
-            #[test]
-            fn two_nested_empty_lists() {
-                // List with one UTF8 string: llleee
-                //   1   2   3   4   5   6 (pos)
-                //   l   l   l   e   e   e (byte)
-                // 108 108 108 101 101 101 (byte decimal)
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
 
-                let data = b"llleee";
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
+                    assert_eq!(parser.json, "[[]]".to_string());
+                }
 
-                assert_eq!(parser.json, "[[[]]]".to_string());
+                #[test]
+                fn two_nested_empty_lists() {
+                    // List with two nested empty lists: llleee
+                    //   1   2   3   4   5   6 (pos)
+                    //   l   l   l   e   e   e (byte)
+                    // 108 108 108 101 101 101 (byte decimal)
+
+                    let data = b"llleee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[[[]]]".to_string());
+                }
+
+                #[test]
+                fn nested_list_with_integer() {
+                    // List with one empty list: lli42eee
+                    //   1   2   3   4   5   6   7   4 (pos)
+                    //   l   l   i   4   2   e   e   e (byte)
+                    // 108 108 105  52  50 101 101 101 (byte decimal)
+
+                    let data = b"lli42eee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[[42]]".to_string());
+                }
+
+                /* todo:
+                    - Nested list with UTF-8 string
+                    - Nested list with non UTF-8 string
+
+                    - Two nested lists with one integer each
+                    - Two nested lists with one UTF-8 string each
+                    - Two nested lists with one non UTF-8 string each
+                */
             }
 
             /* todo:
-                - With one list (nested lists)
                 - With one dictionary
             */
         }
@@ -594,6 +629,7 @@ mod tests {
                 // 108 105  52  50 101 105  52  51 101 101 (byte decimal)
 
                 let data = b"li42ei43ee";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -622,8 +658,8 @@ mod tests {
                 // 108  53  58 255 254 105  99 253 252 101 (byte decimal)
 
                 let data = b"l2:\xFF\xFE2:\xFD\xFCe";
-                let mut parser = BencodeParser::new(&data[..]);
 
+                let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
                 assert_eq!(
@@ -644,6 +680,7 @@ mod tests {
                 // 108 105  52  50 101  53  58  97 108 105  99 101 101 (byte decimal)
 
                 let data = b"li42e5:alicee";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -658,6 +695,7 @@ mod tests {
                 // 108 105  52  50 101  50  58 255 254 105 (byte decimal)
 
                 let data = b"li42e2:\xFF\xFEe";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -672,6 +710,7 @@ mod tests {
                 // 108  53  58  97 108 105  99 101 105  52  50 101 101 101 (byte decimal)
 
                 let data = b"l5:alicei42ee";
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
@@ -686,6 +725,7 @@ mod tests {
                 // 108  50  58 255 254 105  52  50 101105 (byte decimal)
 
                 let data = b"l2:\xFF\xFEi42ee";
+                
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
