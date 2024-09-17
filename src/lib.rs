@@ -622,6 +622,25 @@ mod tests {
 
                 assert_eq!(parser.output, "[42,\"alice\"]".to_string());
             }
+
+            #[test]
+            fn integer_and_non_utf8_string() {
+                // List with two integers: li42e2:\xFF\xFEe
+                //   1   2   3   4   5   6   7   8   9  10 (pos)
+                //   l   i   4   2   e   2   : xFF xFE   e (byte)
+                // 108 105  52  50 101  50  58 255 254 105 (byte decimal)
+
+                let data = b"li42e2:\xFF\xFEe";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.output, "[42,\"<hex>fffe</hex>\"]".to_string());
+            }
+
+            /* todo:
+                - Integer and list
+                - Integer and dictionary
+            */
         }
     }
 }
