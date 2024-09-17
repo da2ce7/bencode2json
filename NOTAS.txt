@@ -1,0 +1,17 @@
+                    // Parece que el ejemplo en C usa una pila pero solo para ver por qué
+                    // que tipo de estructura se está parseando.
+                    // Usa convenciones de estandos en los que se peude estar parseando
+                    // una lista o diccionario.
+                    // Puedo usar un enum para los estados. Usar los mismos que el programa de c pero
+                    // con nombres. De hecho puedo hacer la misma implementación.
+                    // Lo bueno de esa pila es que funciona con un solo byte para el enum.
+                    // La verdad que consume poquísima memoria.
+                    // Es como la maquina de estados del parser en done hay subestados.
+                    // Al final se podría incluso hacer el diagrama. Creo que
+                    // para los compiladores se usaba algúndigrama para prepresentar la
+                    // gramática. Lo que no estoy seguro es que es un token.
+                    // Al final el bucle parsea los tokens pero tambín monta la gramática.
+                    // De hecho la gramática es la otra máquina de esatdos.
+                    // En realidad el lengauage tiene solo un elemento que es expresión,
+                    // que es recursivo y termina en elementos integer y string.
+                    // Bueno es un lenguage con un solo elemento que puede tener 4 tipos.

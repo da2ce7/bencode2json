@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
 use std::io::{self, Read};
 use std::str;
 
+/*
 #[derive(Debug, PartialEq)]
 pub enum JsonValue {
     String(String),
@@ -10,19 +10,50 @@ pub enum JsonValue {
     Dictionary(Vec<(String, JsonValue)>),
     BinaryData(String), // For non-UTF8 strings
 }
+    */
+
+#[derive(Debug, PartialEq)]
+pub enum State {
+    ParsingInteger,
+    ParsingString(ParsingString),
+    ParsingList(ParsingList),
+    ParsingDictionary(ParsingDictionary),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ParsingString {
+    ParsingLength,
+    ParsingChars,
+}
+
+/// l y m
+#[derive(Debug, PartialEq)]
+pub enum ParsingList {
+    Start, // l
+    Rest,  // m
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ParsingDictionary {
+    Start,        // d
+    ExpectingKey, // e
+    EndKeyValue,  // f
+}
 
 pub struct BencodeParser<R: Read> {
     reader: R,
-    _stack: VecDeque<JsonValue>,
-    output: String,
+    stack: Vec<State>,
+    pub output: String,
+    pub pos: u64,
 }
 
 impl<R: Read> BencodeParser<R> {
     pub fn new(reader: R) -> Self {
         BencodeParser {
             reader,
-            _stack: VecDeque::new(),
+            stack: Vec::new(),
             output: String::new(),
+            pos: 0,
         }
     }
 
@@ -34,85 +65,340 @@ impl<R: Read> BencodeParser<R> {
     ///
     /// Will panic if ...
     #[allow(clippy::match_on_vec_items)]
-    pub fn parse(&mut self) -> io::Result<String> {
-        let byte = self.read_byte()?;
+    #[allow(clippy::single_match)]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::match_same_arms)]
+    #[allow(clippy::single_match_else)]
+    pub fn parse(&mut self) -> io::Result<()> {
+        let mut iter = 1;
 
-        match byte {
-            b'i' => {
-                // Read bytes until we find the end of the integer
-                loop {
-                    let byte = self.read_byte()?;
-                    if byte == b'e' {
-                        break;
-                    }
-                    self.output.push(byte as char);
+        let mut bytes_for_string_length = Vec::new();
+        let mut string_length = 0;
+        let mut string_bytes = Vec::new();
+        let mut string_bytes_counter = 0;
+
+        loop {
+            let byte = match self.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    break; // Handle EOF gracefully, exit the loop
                 }
-            }
-            b'0'..=b'9' => {
-                // Read bytes until we find the end of the integer
-                let mut length_bytes = Vec::new();
+                Err(err) => return Err(err),
+            };
 
-                length_bytes.push(byte);
+            // List with 2 integers: li42ei43ee
+            //   1   2  3  4   5   6  7  8   9  10 (pos)
+            //   l   i  4  2   e   i  4  3   e   e (byte)
+            // 108 105 52 50 101 105 52 51 101 101 (byte decimal)
 
-                loop {
-                    let byte = self.read_byte()?;
-                    if byte == b':' {
-                        break;
+            println!(
+                "iter: {}\npos: {}\nbyte: {} ({})\nstack: {:#?}\n",
+                iter, self.pos, byte, byte as char, self.stack
+            );
+
+            match byte {
+                b'i' => {
+                    // State machine
+
+                    match self.stack.last() {
+                        Some(head) => match head {
+                            State::ParsingList(parsing_list) => match parsing_list {
+                                ParsingList::Start => {
+                                    self.stack.push(State::ParsingInteger);
+                                }
+                                ParsingList::Rest => {
+                                    self.stack.push(State::ParsingInteger);
+                                    self.output.push(',');
+                                }
+                            },
+                            State::ParsingDictionary(_) => {
+                                panic!("invalid byte, expected list item")
+                            }
+                            State::ParsingInteger => {
+                                panic!("invalid byte, parsing integer expected digit")
+                            }
+                            State::ParsingString(parsing_string) => match parsing_string {
+                                ParsingString::ParsingLength => {
+                                    panic!("unexpected byte 'i', parsing string length ")
+                                }
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing capturing the string bytes
+
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &format!(
+                                                    "<hex>{}</hex>",
+                                                    bytes_to_hex(&string_bytes)
+                                                )
+                                            }
+                                        };
+
+                                        self.output.push_str(string);
+                                    }
+                                }
+                            },
+                        },
+                        None => {
+                            self.stack.push(State::ParsingInteger);
+                        }
                     }
+                }
+                b'0'..=b'9' => {
+                    // State machine
+
+                    match self.stack.last() {
+                        Some(state) => match state {
+                            State::ParsingInteger => {
+                                self.output.push(byte as char);
+                            }
+                            State::ParsingString(parsing_string) => match parsing_string {
+                                ParsingString::ParsingLength => bytes_for_string_length.push(byte),
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing capturing the string bytes
+
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &format!(
+                                                    "<hex>{}</hex>",
+                                                    bytes_to_hex(&string_bytes)
+                                                )
+                                            }
+                                        };
+
+                                        self.output.push_str(string);
+                                    }
+                                }
+                            },
+                            State::ParsingList(_parsing_list) => todo!(),
+                            State::ParsingDictionary(_parsing_dictionary) => todo!(),
+                        },
+                        None => {
+                            // First byte in input
+                            self.stack
+                                .push(State::ParsingString(ParsingString::ParsingLength));
+                            bytes_for_string_length.push(byte);
+                        }
+                    };
+
+                    /*
+                    // Parse int
+
+                    // Read bytes until we find the end of the string length
+                    let mut length_bytes = Vec::new();
+
                     length_bytes.push(byte);
+
+                    loop {
+                        let byte = self.read_byte()?;
+                        if byte == b':' {
+                            break;
+                        }
+                        length_bytes.push(byte);
+                    }
+
+                    //println!("length_bytes: {length_bytes:#?}");
+
+                    let length_str = str::from_utf8(&length_bytes).unwrap();
+
+                    //println!("length_str: {length_str}");
+
+                    let length = length_str.parse::<usize>().unwrap();
+
+                    //println!("length: {length}");
+
+                    // Read "length" bytes until the end of the string
+                    let string_bytes = self.read_n_bytes(length)?;
+
+                    let string = match str::from_utf8(&string_bytes) {
+                        Ok(string) => string,
+                        Err(_) => &bytes_to_hex(&string_bytes),
+                    };
+
+                    //println!("utf8 string: {string}");
+
+                    self.output.push_str(&format!("\"{string}\""));
+                    */
                 }
+                b':' => match self.stack.last() {
+                    Some(state) => match state {
+                        State::ParsingString(parsing_string) => {
+                            match parsing_string {
+                                ParsingString::ParsingLength => {
+                                    // We reach the end of the string length
+                                    let length_str =
+                                        str::from_utf8(&bytes_for_string_length).unwrap();
+                                    println!("length_str: {length_str}");
 
-                //println!("length_bytes: {length_bytes:#?}");
+                                    string_length = length_str.parse::<usize>().unwrap();
+                                    println!("string_length_number: {string_length}");
+                                }
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing capturing the string bytes
 
-                let length_str = str::from_utf8(&length_bytes).unwrap();
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &format!(
+                                                    "<hex>{}</hex>",
+                                                    bytes_to_hex(&string_bytes)
+                                                )
+                                            }
+                                        };
 
-                //println!("length_str: {length_str}");
+                                        self.output.push_str(string);
+                                    }
+                                }
+                            }
+                        }
+                        _ => panic!("unexpected byte: ':', not parsing a string"),
+                    },
+                    None => {
+                        panic!("unexpected byte: ':', not parsing a string");
+                    }
+                },
+                b'l' => {
+                    match self.stack.last() {
+                        Some(head) => match head {
+                            State::ParsingList(parsing_list) => match parsing_list {
+                                ParsingList::Start => {
+                                    self.stack.push(State::ParsingList(ParsingList::Rest));
+                                }
+                                ParsingList::Rest => {}
+                            },
+                            State::ParsingDictionary(_) => {
+                                panic!("invalid byte, expected list item")
+                            }
+                            State::ParsingInteger => {}
+                            State::ParsingString(parsing_string) => match parsing_string {
+                                ParsingString::ParsingLength => {
+                                    panic!("unexpected byte: 'l', parsing string length")
+                                }
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing capturing the string bytes
 
-                let length = length_str.parse::<usize>().unwrap();
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &format!(
+                                                    "<hex>{}</hex>",
+                                                    bytes_to_hex(&string_bytes)
+                                                )
+                                            }
+                                        };
 
-                //println!("length: {length}");
+                                        self.output.push_str(string);
+                                    }
+                                }
+                            },
+                        },
+                        None => self.stack.push(State::ParsingList(ParsingList::Start)),
+                    }
 
-                // Read "length" bytes until the end of the string
-                let string_bytes = self.read_n_bytes(length)?;
+                    self.output.push('[');
 
-                let string = match str::from_utf8(&string_bytes) {
-                    Ok(string) => string,
-                    Err(_) => &bytes_to_hex(&string_bytes),
-                };
+                    //self.parse()?;
+                }
+                b'e' => {
+                    match self.stack.last() {
+                        Some(head) => match head {
+                            State::ParsingList(_) => {
+                                self.stack.pop();
+                                self.output.push(']');
+                            }
+                            State::ParsingDictionary(_) => {
+                                panic!("invalid byte, expected list item")
+                            }
+                            State::ParsingInteger => {
+                                // We have finished parsing the integer
+                                self.stack.pop();
+                            }
+                            State::ParsingString(parsing_string) => match parsing_string {
+                                ParsingString::ParsingLength => {
+                                    panic!("unexpected byte: 'e', parsing string length")
+                                }
+                                ParsingString::ParsingChars => {
+                                    string_bytes.push(byte);
+                                    string_bytes_counter += 1;
+                                    if string_bytes_counter == string_length {
+                                        // We have finishing parsing the integer
 
-                //println!("utf8 string: {string}");
+                                        let string = match str::from_utf8(&string_bytes) {
+                                            Ok(string) => string,
+                                            Err(_) => {
+                                                // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                &format!(
+                                                    "<hex>{}</hex>",
+                                                    bytes_to_hex(&string_bytes)
+                                                )
+                                            }
+                                        };
 
-                self.output.push_str(&format!("\"{string}\""));
+                                        self.output.push_str(string);
+                                        self.stack.pop();
+                                    }
+                                }
+                            },
+                        },
+                        None => panic!("invalid byte, unexpected end byte `e`"),
+                    }
+
+                    match self.stack.last() {
+                        Some(state) => match state {
+                            State::ParsingList(parsing_list) => match parsing_list {
+                                ParsingList::Start => {
+                                    self.stack.pop();
+                                    self.stack.push(State::ParsingList(ParsingList::Rest));
+                                }
+                                ParsingList::Rest => {}
+                            },
+                            State::ParsingInteger => {}
+                            State::ParsingString(_parsing_string) => {}
+                            State::ParsingDictionary(_parsing_dictionary) => {}
+                        },
+                        None => {}
+                    }
+                }
+                /*
+                b'l' => {}
+                b'd' => {}
+                b'e' => {}
+                b'0'..=b'9' => {}
+                10 => {
+                    // Ignore New Line byte (NL)
+                }
+                 */
+                _ => panic!("Unknown token {byte}"),
             }
-            b'l' => {
-                self.output.push('[');
 
-                self.parse()?;
-
-                self.output.push(']');
-            }
-            b'e' => {
-                // End of integer, list or dictionary
-                // Do nothing
-            }
-            /*
-            b'l' => {}
-            b'd' => {}
-            b'e' => {}
-            b'0'..=b'9' => {}
-            10 => {
-                // Ignore New Line byte (NL)
-            }
-             */
-            _ => panic!("Unknown token {byte}"),
+            iter += 1;
         }
 
-        Ok(self.output.clone())
+        Ok(())
     }
 
     fn read_byte(&mut self) -> io::Result<u8> {
         let mut byte = [0; 1];
         self.reader.read_exact(&mut byte)?;
+        self.pos += 1;
         Ok(byte[0])
     }
 
@@ -143,24 +429,24 @@ mod tests {
     fn integer() {
         let data = b"i42e";
         let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(result, "42".to_string());
+        parser.parse().unwrap();
+        assert_eq!(parser.output, "42".to_string());
     }
 
     #[test]
     fn utf8_string() {
         let data = b"4:spam";
         let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(result, "\"spam\"".to_string());
+        parser.parse().unwrap();
+        assert_eq!(parser.output, "\"spam\"".to_string());
     }
 
     #[test]
     fn non_utf8_string() {
         let data = b"4:\xFF\xFE\xFD\xFC";
         let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(result, "\"<hex>fffefdfc</hex>\"".to_string());
+        parser.parse().unwrap();
+        assert_eq!(parser.output, "\"<hex>fffefdfc</hex>\"".to_string());
     }
 
     mod lists {
@@ -170,24 +456,48 @@ mod tests {
         fn empty_list() {
             let data = b"le";
             let mut parser = BencodeParser::new(&data[..]);
-            let result = parser.parse().unwrap();
-            assert_eq!(result, "[]".to_string());
+            parser.parse().unwrap();
+            assert_eq!(parser.output, "[]".to_string());
         }
 
-        #[test]
-        fn with_one_integer() {
-            let data = b"li42ee";
-            let mut parser = BencodeParser::new(&data[..]);
-            let result = parser.parse().unwrap();
-            assert_eq!(result, "[42]".to_string());
+        mod with_one_item {
+            use crate::BencodeParser;
+
+            #[test]
+            fn with_one_integer() {
+                let data = b"li42ee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+                assert_eq!(parser.output, "[42]".to_string());
+            }
+
+            #[test]
+            fn with_one_utf8_string() {
+                let data = b"l4:spame";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+                assert_eq!(parser.output, "[\"spam\"]".to_string());
+            }
         }
 
-        #[test]
-        fn with_one_utf8_string() {
-            let data = b"l4:spame";
-            let mut parser = BencodeParser::new(&data[..]);
-            let result = parser.parse().unwrap();
-            assert_eq!(result, "[\"spam\"]".to_string());
+        mod with_two_items {
+            use crate::BencodeParser;
+
+            #[test]
+            fn with_two_integers() {
+                let data = b"li42ei43ee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+                assert_eq!(parser.output, "[42,43]".to_string());
+            }
+
+            #[test]
+            fn with_two_utf8_strings() {
+                let data = b"l5:alice3:bobe";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+                assert_eq!(parser.output, "[\"alice\",\"bob\"]".to_string());
+            }
         }
     }
 
