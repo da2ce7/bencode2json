@@ -491,6 +491,11 @@ mod tests {
 
             assert_eq!(parser.output, "\"<hex>fffefdfc</hex>\"".to_string());
         }
+
+        /* todo:
+           - String containing special chars: 'i', ':', 'l', 'd', 'e'. The
+             bencoded string can contain reserved chars in bencode format.
+        */
     }
 
     mod lists {
@@ -598,6 +603,24 @@ mod tests {
                     parser.output,
                     "[\"<hex>fffe</hex>\",\"<hex>fdfc</hex>\"]".to_string()
                 );
+            }
+        }
+
+        mod with_two_items_of_different_types {
+            use crate::BencodeParser;
+
+            #[test]
+            fn integer_and_utf8_string() {
+                // List with two integers: li42e5:alicee
+                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
+                //   l   i   4   2   e   5   :   a   l   i   c   e   e (byte)
+                // 108 105  52  50 101  53  58  97 108 105  99 101 101 (byte decimal)
+
+                let data = b"li42e5:alicee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.output, "[42,\"alice\"]".to_string());
             }
         }
     }

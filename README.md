@@ -25,3 +25,9 @@ To run unit and integration tests:
 ```console
 cargo test
 ```
+
+## TODO
+
+- Counter for number of items in a list for debugging and errors.
+- Return errors with position.
+
