@@ -15,3 +15,7 @@
                     // En realidad el lengauage tiene solo un elemento que es expresión,
                     // que es recursivo y termina en elementos integer y string.
                     // Bueno es un lenguage con un solo elemento que puede tener 4 tipos.
+
+- Podría contar el número de items en la lista en vez de tener dos estados. Que el estado tengo un contador.                    
+- Puedo hacer las listas aninadas.
+

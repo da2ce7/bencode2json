@@ -611,7 +611,7 @@ mod tests {
 
             #[test]
             fn integer_and_utf8_string() {
-                // List with two integers: li42e5:alicee
+                // List with an integer and a UTF-8 string: li42e5:alicee
                 //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
                 //   l   i   4   2   e   5   :   a   l   i   c   e   e (byte)
                 // 108 105  52  50 101  53  58  97 108 105  99 101 101 (byte decimal)
@@ -624,8 +624,22 @@ mod tests {
             }
 
             #[test]
+            fn utf8_string_and_integer() {
+                // List with a UTF-8 string and an integer: l5:alicei42ee
+                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
+                //   l   5   :   a   l   i   c   e   i   4   2   e   e (byte)
+                // 108  53  58  97 108 105  99 101 105  52  50 101 101 101 (byte decimal)
+
+                let data = b"l5:alicei42ee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.output, "[\"alice\",42]".to_string());
+            }
+
+            #[test]
             fn integer_and_non_utf8_string() {
-                // List with two integers: li42e2:\xFF\xFEe
+                // List with an integer a non UTF-8 string: li42e2:\xFF\xFEe
                 //   1   2   3   4   5   6   7   8   9  10 (pos)
                 //   l   i   4   2   e   2   : xFF xFE   e (byte)
                 // 108 105  52  50 101  50  58 255 254 105 (byte decimal)
@@ -635,6 +649,20 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(parser.output, "[42,\"<hex>fffe</hex>\"]".to_string());
+            }
+
+            #[test]
+            fn non_utf8_string_and_an_integer() {
+                // List with a non UTF-8 string and an integer: l2:\xFF\xFEi42ee
+                //   1   2   3   4   5   6   7   8   9  10 (pos)
+                //   l   2   : xFF xFE   i   4   2   e  e (byte)
+                // 108  50  58 255 254 105  52  50 101105 (byte decimal)
+
+                let data = b"l2:\xFF\xFEi42ee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.output, "[\"<hex>fffe</hex>\",42]".to_string());
             }
 
             /* todo:
