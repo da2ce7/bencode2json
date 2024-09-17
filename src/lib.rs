@@ -624,20 +624,6 @@ mod tests {
             }
 
             #[test]
-            fn utf8_string_and_integer() {
-                // List with a UTF-8 string and an integer: l5:alicei42ee
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
-                //   l   5   :   a   l   i   c   e   i   4   2   e   e (byte)
-                // 108  53  58  97 108 105  99 101 105  52  50 101 101 101 (byte decimal)
-
-                let data = b"l5:alicei42ee";
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"alice\",42]".to_string());
-            }
-
-            #[test]
             fn integer_and_non_utf8_string() {
                 // List with an integer a non UTF-8 string: li42e2:\xFF\xFEe
                 //   1   2   3   4   5   6   7   8   9  10 (pos)
@@ -649,6 +635,20 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(parser.json, "[42,\"<hex>fffe</hex>\"]".to_string());
+            }
+
+            #[test]
+            fn utf8_string_and_integer() {
+                // List with a UTF-8 string and an integer: l5:alicei42ee
+                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
+                //   l   5   :   a   l   i   c   e   i   4   2   e   e (byte)
+                // 108  53  58  97 108 105  99 101 105  52  50 101 101 101 (byte decimal)
+
+                let data = b"l5:alicei42ee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "[\"alice\",42]".to_string());
             }
 
             #[test]
@@ -668,6 +668,12 @@ mod tests {
             /* todo:
                 - Integer and list
                 - Integer and dictionary
+
+                - UTF-8 string and list
+                - UTF-8 string and dictionary
+
+                - Non UTF-8 string and list
+                - Non UTF-8 string and dictionary
             */
         }
     }
