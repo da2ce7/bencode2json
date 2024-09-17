@@ -444,7 +444,7 @@ impl<R: Read> BencodeParser<R> {
         }
     }
 
-    fn _read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
+    /*fn _read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
         let mut bytes = Vec::new();
 
         for _i in 1..=n {
@@ -452,11 +452,7 @@ impl<R: Read> BencodeParser<R> {
         }
 
         Ok(bytes)
-    }
-}
-
-fn _is_valid_utf8(data: &[u8]) -> bool {
-    str::from_utf8(data).is_ok()
+    }*/
 }
 
 fn bytes_to_hex(data: &[u8]) -> String {
@@ -475,20 +471,26 @@ mod tests {
         assert_eq!(parser.output, "42".to_string());
     }
 
-    #[test]
-    fn utf8_string() {
-        let data = b"4:spam";
-        let mut parser = BencodeParser::new(&data[..]);
-        parser.parse().unwrap();
-        assert_eq!(parser.output, "\"spam\"".to_string());
-    }
+    mod strings {
+        use crate::BencodeParser;
 
-    #[test]
-    fn non_utf8_string() {
-        let data = b"4:\xFF\xFE\xFD\xFC";
-        let mut parser = BencodeParser::new(&data[..]);
-        parser.parse().unwrap();
-        assert_eq!(parser.output, "\"<hex>fffefdfc</hex>\"".to_string());
+        #[test]
+        fn utf8() {
+            let data = b"4:spam";
+            let mut parser = BencodeParser::new(&data[..]);
+            parser.parse().unwrap();
+
+            assert_eq!(parser.output, "\"spam\"".to_string());
+        }
+
+        #[test]
+        fn non_utf8() {
+            let data = b"4:\xFF\xFE\xFD\xFC";
+            let mut parser = BencodeParser::new(&data[..]);
+            parser.parse().unwrap();
+
+            assert_eq!(parser.output, "\"<hex>fffefdfc</hex>\"".to_string());
+        }
     }
 
     mod lists {
@@ -507,7 +509,7 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
-            fn with_one_integer() {
+            fn integer() {
                 let data = b"li42ee";
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
@@ -516,7 +518,7 @@ mod tests {
             }
 
             #[test]
-            fn with_one_utf8_string() {
+            fn utf8_string() {
                 // List with one UTF8 string: l4:spame
                 //   1   2   3   4   5   6   7   8 (pos)
                 //   l   4   :   s   p   a   m   e (byte)
@@ -530,7 +532,7 @@ mod tests {
             }
 
             #[test]
-            fn with_one_non_utf8_string() {
+            fn non_utf8_string() {
                 // List with one UTF8 string: l4:\xFF\xFE\xFD\xFCe
                 //   1   2   3   4   5   6   7   8 (pos)
                 //   l   4   : xFF xFE xFD xFC   e (byte)
@@ -542,13 +544,18 @@ mod tests {
 
                 assert_eq!(parser.output, "[\"<hex>fffefdfc</hex>\"]".to_string());
             }
+
+            /* todo:
+                - With one list (nested lists)
+                - With one dictionary
+            */
         }
 
         mod with_two_items_of_the_same_type {
             use crate::BencodeParser;
 
             #[test]
-            fn with_two_integers() {
+            fn two_integers() {
                 // List with two integers: li42ei43ee
                 //   1   2   3   4   5   6   7   8   9  10 (pos)
                 //   l   i   4   2   e   i   4   3   e   e (byte)
@@ -562,7 +569,7 @@ mod tests {
             }
 
             #[test]
-            fn with_two_utf8_strings() {
+            fn two_utf8_strings() {
                 // List with two UTF8 strings: l5:alice3:bobe
                 //   1   2   3   4   5   6   7   8   9  10  11  12  13  14 (pos)
                 //   l   5   :   a   l   i   c   e   3   :   b   o   b   e (byte)
@@ -576,7 +583,7 @@ mod tests {
             }
 
             #[test]
-            fn with_two_non_utf8_strings() {
+            fn two_non_utf8_strings() {
                 // List with two UTF8 strings: l2:\xFF\xFE2:\xFD\xFCe
                 //   1   2   3   4   5   6   7   8   9  10 (pos)
                 //   l   2   : xFF xFE   2   : xFD xFC   e (byte)
