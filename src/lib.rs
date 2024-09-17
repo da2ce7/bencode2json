@@ -32,7 +32,7 @@ pub enum ParsingDictionary {
 pub struct BencodeParser<R: Read> {
     reader: R,
     stack: Vec<State>,
-    pub output: String,
+    pub json: String,
     pub iter: u64,
     pub pos: u64,
 }
@@ -42,7 +42,7 @@ impl<R: Read> BencodeParser<R> {
         BencodeParser {
             reader,
             stack: Vec::new(),
-            output: String::new(),
+            json: String::new(),
             pos: 0,
             iter: 1,
         }
@@ -103,7 +103,7 @@ impl<R: Read> BencodeParser<R> {
                                 }
                                 ParsingList::Rest => {
                                     self.stack.push(State::ParsingInteger);
-                                    self.output.push(',');
+                                    self.json.push(',');
                                 }
                             },
                             State::ParsingDictionary(_) => {
@@ -130,7 +130,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -150,7 +150,7 @@ impl<R: Read> BencodeParser<R> {
                     match self.stack.last() {
                         Some(state) => match state {
                             State::ParsingInteger => {
-                                self.output.push(byte as char);
+                                self.json.push(byte as char);
                             }
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {
@@ -171,7 +171,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -211,7 +211,7 @@ impl<R: Read> BencodeParser<R> {
                                             ParsingString::ParsingLength,
                                         ));
 
-                                        self.output.push(',');
+                                        self.json.push(',');
                                     }
                                 }
                             }
@@ -268,7 +268,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -314,7 +314,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -325,7 +325,7 @@ impl<R: Read> BencodeParser<R> {
                         },
                         None => {
                             self.stack.push(State::ParsingList(ParsingList::Start));
-                            self.output.push('[');
+                            self.json.push('[');
                         }
                     }
                 }
@@ -335,7 +335,7 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingList(_) => {
                                 // We have finished parsing the list
                                 self.stack.pop();
-                                self.output.push(']');
+                                self.json.push(']');
                             }
                             State::ParsingDictionary(_) => {
                                 panic!("invalid byte, expected list item")
@@ -362,7 +362,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -398,7 +398,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         };
 
-                                        self.output.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&format!("\"{string}\""));
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -468,7 +468,7 @@ mod tests {
         let data = b"i42e";
         let mut parser = BencodeParser::new(&data[..]);
         parser.parse().unwrap();
-        assert_eq!(parser.output, "42".to_string());
+        assert_eq!(parser.json, "42".to_string());
     }
 
     mod strings {
@@ -480,7 +480,7 @@ mod tests {
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
-            assert_eq!(parser.output, "\"spam\"".to_string());
+            assert_eq!(parser.json, "\"spam\"".to_string());
         }
 
         #[test]
@@ -489,7 +489,7 @@ mod tests {
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
-            assert_eq!(parser.output, "\"<hex>fffefdfc</hex>\"".to_string());
+            assert_eq!(parser.json, "\"<hex>fffefdfc</hex>\"".to_string());
         }
 
         /* todo:
@@ -507,7 +507,7 @@ mod tests {
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
 
-            assert_eq!(parser.output, "[]".to_string());
+            assert_eq!(parser.json, "[]".to_string());
         }
 
         mod with_one_item {
@@ -519,7 +519,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[42]".to_string());
+                assert_eq!(parser.json, "[42]".to_string());
             }
 
             #[test]
@@ -533,7 +533,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[\"spam\"]".to_string());
+                assert_eq!(parser.json, "[\"spam\"]".to_string());
             }
 
             #[test]
@@ -547,7 +547,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[\"<hex>fffefdfc</hex>\"]".to_string());
+                assert_eq!(parser.json, "[\"<hex>fffefdfc</hex>\"]".to_string());
             }
 
             /* todo:
@@ -570,7 +570,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[42,43]".to_string());
+                assert_eq!(parser.json, "[42,43]".to_string());
             }
 
             #[test]
@@ -584,7 +584,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[\"alice\",\"bob\"]".to_string());
+                assert_eq!(parser.json, "[\"alice\",\"bob\"]".to_string());
             }
 
             #[test]
@@ -600,7 +600,7 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(
-                    parser.output,
+                    parser.json,
                     "[\"<hex>fffe</hex>\",\"<hex>fdfc</hex>\"]".to_string()
                 );
             }
@@ -620,7 +620,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[42,\"alice\"]".to_string());
+                assert_eq!(parser.json, "[42,\"alice\"]".to_string());
             }
 
             #[test]
@@ -634,7 +634,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[\"alice\",42]".to_string());
+                assert_eq!(parser.json, "[\"alice\",42]".to_string());
             }
 
             #[test]
@@ -648,7 +648,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[42,\"<hex>fffe</hex>\"]".to_string());
+                assert_eq!(parser.json, "[42,\"<hex>fffe</hex>\"]".to_string());
             }
 
             #[test]
@@ -662,7 +662,7 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
-                assert_eq!(parser.output, "[\"<hex>fffe</hex>\",42]".to_string());
+                assert_eq!(parser.json, "[\"<hex>fffe</hex>\",42]".to_string());
             }
 
             /* todo:
