@@ -93,8 +93,6 @@ impl<R: Read> BencodeParser<R> {
 
             match byte {
                 b'i' => {
-                    // State machine
-
                     match self.stack.last() {
                         Some(head) => match head {
                             State::ParsingList(parsing_list) => match parsing_list {
@@ -288,7 +286,8 @@ impl<R: Read> BencodeParser<R> {
                         Some(head) => match head {
                             State::ParsingList(parsing_list) => match parsing_list {
                                 ParsingList::Start => {
-                                    self.stack.push(State::ParsingList(ParsingList::Rest));
+                                    self.stack.push(State::ParsingList(ParsingList::Start));
+                                    self.json.push('[');
                                 }
                                 ParsingList::Rest => {}
                             },
@@ -548,6 +547,20 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(parser.json, "[\"<hex>fffefdfc</hex>\"]".to_string());
+            }
+
+            #[test]
+            fn nested_empty_list() {
+                // List with one UTF8 string: llee
+                //   1   2   3   4 (pos)
+                //   l   l   e   e (byte)
+                // 108 108 101 101 (byte decimal)
+
+                let data = b"llee";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "[[]]".to_string());
             }
 
             /* todo:

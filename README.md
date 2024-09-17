@@ -56,6 +56,11 @@ cargo test
 - <https://gist.github.com/camilleoudot/840929699392b3d25afbec25d850c94a>
 - <https://github.com/denis-selimovic/bencode>
 
+Bencode online:
+
+- <https://adrianstoll.com/post/bencoding/>
+- <https://chocobo1.github.io/bencode_online/>
+
 ## Credits
 
 THis implementation is basically a port to Rust from <https://gist.github.com/camilleoudot/840929699392b3d25afbec25d850c94a> with some changes like:
