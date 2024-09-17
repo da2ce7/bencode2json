@@ -725,7 +725,7 @@ mod tests {
                 // 108  50  58 255 254 105  52  50 101105 (byte decimal)
 
                 let data = b"l2:\xFF\xFEi42ee";
-                
+
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
 
