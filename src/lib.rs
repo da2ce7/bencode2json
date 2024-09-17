@@ -48,6 +48,8 @@ impl<R: Read> BencodeParser<R> {
         }
     }
 
+    /// todo
+    ///
     /// # Errors
     ///
     ///
@@ -485,6 +487,19 @@ mod tests {
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
                 assert_eq!(parser.output, "[\"spam\"]".to_string());
+            }
+
+            #[test]
+            fn with_one_non_utf8_string() {
+                // List with one UTF8 string: l4:\xFF\xFE\xFD\xFCe
+                //   1   2   3   4   5   6   7   8 (pos)
+                //   l   4   : xFF xFE xFD xFC   e (byte)
+                // 108  52  58 255 254 253 252 101 (byte decimal)
+
+                let data = b"l4:\xFF\xFE\xFD\xFCe";
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+                assert_eq!(parser.output, "[\"<hex>fffefdfc</hex>\"]".to_string());
             }
         }
 
