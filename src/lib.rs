@@ -1,17 +1,6 @@
 use std::io::{self, Read};
 use std::str;
 
-/*
-#[derive(Debug, PartialEq)]
-pub enum JsonValue {
-    String(String),
-    Integer(i64),
-    List(Vec<JsonValue>),
-    Dictionary(Vec<(String, JsonValue)>),
-    BinaryData(String), // For non-UTF8 strings
-}
-    */
-
 #[derive(Debug, PartialEq)]
 pub enum State {
     ParsingInteger,
@@ -44,6 +33,7 @@ pub struct BencodeParser<R: Read> {
     reader: R,
     stack: Vec<State>,
     pub output: String,
+    pub iter: u64,
     pub pos: u64,
 }
 
@@ -54,6 +44,7 @@ impl<R: Read> BencodeParser<R> {
             stack: Vec::new(),
             output: String::new(),
             pos: 0,
+            iter: 0,
         }
     }
 
@@ -70,8 +61,6 @@ impl<R: Read> BencodeParser<R> {
     #[allow(clippy::match_same_arms)]
     #[allow(clippy::single_match_else)]
     pub fn parse(&mut self) -> io::Result<()> {
-        let mut iter = 1;
-
         let mut bytes_for_string_length = Vec::new();
         let mut string_length = 0;
         let mut string_bytes = Vec::new();
@@ -82,12 +71,12 @@ impl<R: Read> BencodeParser<R> {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
-                    break; // Handle EOF gracefully, exit the loop
+                    break;
                 }
                 Err(err) => return Err(err),
             };
 
-            println!("iter: {iter}");
+            /*println!("iter: {}", self.iter);
             println!("pos: {}", self.pos);
             println!("byte: {} ({})", byte, byte as char);
             println!("stack: {:#?}", self.stack);
@@ -95,7 +84,7 @@ impl<R: Read> BencodeParser<R> {
             println!("string_length: {string_length}");
             println!("string_bytes: {string_bytes:#?}");
             println!("string_bytes_counter: {string_bytes_counter}");
-            println!();
+            println!();*/
 
             match byte {
                 b'i' => {
@@ -210,6 +199,8 @@ impl<R: Read> BencodeParser<R> {
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
                                         ));
+
+                                        self.output.push(',');
                                     }
                                 }
                             }
@@ -222,45 +213,6 @@ impl<R: Read> BencodeParser<R> {
                             bytes_for_string_length.push(byte);
                         }
                     };
-
-                    /*
-                    // Parse int
-
-                    // Read bytes until we find the end of the string length
-                    let mut length_bytes = Vec::new();
-
-                    length_bytes.push(byte);
-
-                    loop {
-                        let byte = self.read_byte()?;
-                        if byte == b':' {
-                            break;
-                        }
-                        length_bytes.push(byte);
-                    }
-
-                    //println!("length_bytes: {length_bytes:#?}");
-
-                    let length_str = str::from_utf8(&length_bytes).unwrap();
-
-                    //println!("length_str: {length_str}");
-
-                    let length = length_str.parse::<usize>().unwrap();
-
-                    //println!("length: {length}");
-
-                    // Read "length" bytes until the end of the string
-                    let string_bytes = self.read_n_bytes(length)?;
-
-                    let string = match str::from_utf8(&string_bytes) {
-                        Ok(string) => string,
-                        Err(_) => &bytes_to_hex(&string_bytes),
-                    };
-
-                    //println!("utf8 string: {string}");
-
-                    self.output.push_str(&format!("\"{string}\""));
-                    */
                 }
                 b':' => match self.stack.last() {
                     Some(state) => match state {
@@ -270,12 +222,12 @@ impl<R: Read> BencodeParser<R> {
                                     // We reach the end of the string length
                                     let length_str = str::from_utf8(&bytes_for_string_length)
                                         .expect("non UTF8 string length");
-                                    println!("length_str: {length_str}");
+                                    //println!("length_str: {length_str}");
 
                                     string_length = length_str
                                         .parse::<usize>()
                                         .expect("invalid number for string length");
-                                    println!("string_length_number: {string_length}");
+                                    //println!("string_length_number: {string_length}");
 
                                     // todo: is string with size 0 (empty string) allowed in bencode?
 
@@ -344,12 +296,11 @@ impl<R: Read> BencodeParser<R> {
                                 }
                             },
                         },
-                        None => self.stack.push(State::ParsingList(ParsingList::Start)),
+                        None => {
+                            self.stack.push(State::ParsingList(ParsingList::Start));
+                            self.output.push('[');
+                        }
                     }
-
-                    self.output.push('[');
-
-                    //self.parse()?;
                 }
                 b'e' => {
                     match self.stack.last() {
@@ -408,15 +359,6 @@ impl<R: Read> BencodeParser<R> {
                         None => {}
                     }
                 }
-                /*
-                b'l' => {}
-                b'd' => {}
-                b'e' => {}
-                b'0'..=b'9' => {}
-                10 => {
-                    // Ignore New Line byte (NL)
-                }
-                 */
                 _ => {
                     match self.stack.last() {
                         Some(head) => match head {
@@ -450,7 +392,7 @@ impl<R: Read> BencodeParser<R> {
                 }
             }
 
-            iter += 1;
+            self.iter += 1;
         }
 
         Ok(())
@@ -564,6 +506,11 @@ mod tests {
 
             #[test]
             fn with_two_utf8_strings() {
+                // List with two UTF8 strings: l5:alice3:bobe
+                //   1   2   3   4   5   6   7   8   9  10  11  12  13  14 (pos)
+                //   l   5   :   a   l   i   c   e   3   :   b   o   b   e (byte)
+                // 108  53  58  97 108 105  99 101  51  58  98 111  98 101 (byte decimal)
+
                 let data = b"l5:alice3:bobe";
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
@@ -571,20 +518,4 @@ mod tests {
             }
         }
     }
-
-    /* Not implemented
-    #[test]
-    fn test_list() {
-        let data = b"l4:spam4:eggse";
-        let mut parser = BencodeParser::new(&data[..]);
-        let result = parser.parse().unwrap();
-        assert_eq!(
-            result,
-            JsonValue::List(vec![
-                JsonValue::String("spam".to_string()),
-                JsonValue::String("eggs".to_string())
-            ])
-        );
-    }
-     */
 }
