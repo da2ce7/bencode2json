@@ -87,15 +87,15 @@ impl<R: Read> BencodeParser<R> {
                 Err(err) => return Err(err),
             };
 
-            // List with 2 integers: li42ei43ee
-            //   1   2  3  4   5   6  7  8   9  10 (pos)
-            //   l   i  4  2   e   i  4  3   e   e (byte)
-            // 108 105 52 50 101 105 52 51 101 101 (byte decimal)
-
-            println!(
-                "iter: {}\npos: {}\nbyte: {} ({})\nstack: {:#?}\n",
-                iter, self.pos, byte, byte as char, self.stack
-            );
+            println!("iter: {iter}");
+            println!("pos: {}", self.pos);
+            println!("byte: {} ({})", byte, byte as char);
+            println!("stack: {:#?}", self.stack);
+            println!("bytes_for_string_length: {bytes_for_string_length:#?}");
+            println!("string_length: {string_length}");
+            println!("string_bytes: {string_bytes:#?}");
+            println!("string_bytes_counter: {string_bytes_counter}");
+            println!();
 
             match byte {
                 b'i' => {
@@ -156,7 +156,10 @@ impl<R: Read> BencodeParser<R> {
                                 self.output.push(byte as char);
                             }
                             State::ParsingString(parsing_string) => match parsing_string {
-                                ParsingString::ParsingLength => bytes_for_string_length.push(byte),
+                                ParsingString::ParsingLength => {
+                                    // Add a digit for the string length
+                                    bytes_for_string_length.push(byte);
+                                }
                                 ParsingString::ParsingChars => {
                                     string_bytes.push(byte);
                                     string_bytes_counter += 1;
@@ -176,7 +179,40 @@ impl<R: Read> BencodeParser<R> {
                                     }
                                 }
                             },
-                            State::ParsingList(_parsing_list) => todo!(),
+                            State::ParsingList(parsing_list) => {
+                                match parsing_list {
+                                    ParsingList::Start => {
+                                        // First item in the list and it is a string
+
+                                        // New string -> reset current string being parsed
+                                        bytes_for_string_length = Vec::new();
+                                        string_length = 0;
+                                        string_bytes = Vec::new();
+                                        string_bytes_counter = 0;
+
+                                        bytes_for_string_length.push(byte);
+
+                                        self.stack.push(State::ParsingString(
+                                            ParsingString::ParsingLength,
+                                        ));
+                                    }
+                                    ParsingList::Rest => {
+                                        // Non first item in the list and it is a string
+
+                                        // New string -> reset current string being parsed
+                                        bytes_for_string_length = Vec::new();
+                                        string_length = 0;
+                                        string_bytes = Vec::new();
+                                        string_bytes_counter = 0;
+
+                                        bytes_for_string_length.push(byte);
+
+                                        self.stack.push(State::ParsingString(
+                                            ParsingString::ParsingLength,
+                                        ));
+                                    }
+                                }
+                            }
                             State::ParsingDictionary(_parsing_dictionary) => todo!(),
                         },
                         None => {
@@ -232,12 +268,16 @@ impl<R: Read> BencodeParser<R> {
                             match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // We reach the end of the string length
-                                    let length_str =
-                                        str::from_utf8(&bytes_for_string_length).unwrap();
+                                    let length_str = str::from_utf8(&bytes_for_string_length)
+                                        .expect("non UTF8 string length");
                                     println!("length_str: {length_str}");
 
-                                    string_length = length_str.parse::<usize>().unwrap();
+                                    string_length = length_str
+                                        .parse::<usize>()
+                                        .expect("invalid number for string length");
                                     println!("string_length_number: {string_length}");
+
+                                    // todo: is string with size 0 (empty string) allowed in bencode?
 
                                     self.stack.pop();
                                     self.stack
@@ -494,6 +534,11 @@ mod tests {
 
             #[test]
             fn with_one_utf8_string() {
+                // List with one UTF8 string: l4:spame
+                //   1   2   3   4   5   6   7   8 (pos)
+                //   l   4   :   s   p   a   m   e (byte)
+                // 108  52  58 115 112  97 109 101 (byte decimal)
+
                 let data = b"l4:spame";
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
@@ -506,6 +551,11 @@ mod tests {
 
             #[test]
             fn with_two_integers() {
+                // List with two integers: li42ei43ee
+                //   1   2   3   4   5   6   7   8   9  10 (pos)
+                //   l   i   4   2   e   i   4   3   e   e (byte)
+                // 108 105  52  50 101 105  52  51 101 101 (byte decimal)
+
                 let data = b"li42ei43ee";
                 let mut parser = BencodeParser::new(&data[..]);
                 parser.parse().unwrap();
