@@ -45,16 +45,26 @@ pub struct BencodeParser<R: Read> {
 
 #[derive(Default, Debug)]
 struct CurrentStringBeingParsed {
+    // String length
     pub bytes_for_string_length: Vec<u8>,
     pub string_length: usize,
+
+    // String bytes
     pub string_bytes: Vec<u8>,
     pub string_bytes_counter: usize,
 }
 
 impl CurrentStringBeingParsed {
     fn push(&mut self, byte: u8) {
+        // todo: return an error if we try to push a new byte but the end of the
+        // string has been reached.
+
         self.string_bytes.push(byte);
         self.string_bytes_counter += 1;
+    }
+
+    fn has_finishing_capturing_bytes(&self) -> bool {
+        self.string_bytes_counter == self.string_length
     }
 }
 
@@ -150,8 +160,8 @@ impl<R: Read> BencodeParser<R> {
                                     ParsingString::ParsingChars => {
                                         current_string_being_parsed.push(byte);
 
-                                        if current_string_being_parsed.string_bytes_counter
-                                            == current_string_being_parsed.string_length
+                                        if current_string_being_parsed
+                                            .has_finishing_capturing_bytes()
                                         {
                                             // We have finishing capturing the string bytes
 
@@ -199,9 +209,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.push(byte);
 
-                                    if current_string_being_parsed.string_bytes_counter
-                                        == current_string_being_parsed.string_length
-                                    {
+                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = match str::from_utf8(
@@ -370,9 +378,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.push(byte);
 
-                                    if current_string_being_parsed.string_bytes_counter
-                                        == current_string_being_parsed.string_length
-                                    {
+                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = match str::from_utf8(
@@ -428,9 +434,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.push(byte);
 
-                                    if current_string_being_parsed.string_bytes_counter
-                                        == current_string_being_parsed.string_length
-                                    {
+                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = match str::from_utf8(
@@ -515,9 +519,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.push(byte);
 
-                                    if current_string_being_parsed.string_bytes_counter
-                                        == current_string_being_parsed.string_length
-                                    {
+                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing parsing the string
 
                                         let string = match str::from_utf8(
@@ -558,9 +560,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.push(byte);
 
-                                    if current_string_being_parsed.string_bytes_counter
-                                        == current_string_being_parsed.string_length
-                                    {
+                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = match str::from_utf8(
