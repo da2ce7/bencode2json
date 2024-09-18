@@ -25,8 +25,7 @@ pub enum ParsingList {
 #[derive(Debug, PartialEq)]
 pub enum ParsingDictionary {
     Start,
-    FirstKey,
-    FirstKeyValue,
+    FirstKeyValuePair(ParsingKeyValuePair),
 }
 
 #[derive(Debug, PartialEq)]
@@ -116,12 +115,18 @@ impl<R: Read> BencodeParser<R> {
                                         ParsingDictionary::Start => {
                                             panic!("invalid byte 'i', expecting string for dictionary key");
                                         }
-                                        ParsingDictionary::FirstKey => {
-                                            panic!("invalid byte 'i', dictionary key can't be an integer");
-                                        }
-                                        ParsingDictionary::FirstKeyValue => {
-                                            // First key value in the dictionary is an integer
-                                            self.stack.push(State::ParsingInteger);
+                                        ParsingDictionary::FirstKeyValuePair(
+                                            first_key_value_pair,
+                                        ) => {
+                                            match first_key_value_pair {
+                                                ParsingKeyValuePair::Key => {
+                                                    panic!("invalid byte 'i', dictionary key can't be an integer");
+                                                }
+                                                ParsingKeyValuePair::Value => {
+                                                    // First key value in the dictionary is an integer
+                                                    self.stack.push(State::ParsingInteger);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -238,7 +243,9 @@ impl<R: Read> BencodeParser<R> {
                                         // First key in the dictionary
 
                                         self.stack.push(State::ParsingDictionary(
-                                            ParsingDictionary::FirstKey,
+                                            ParsingDictionary::FirstKeyValuePair(
+                                                ParsingKeyValuePair::Key,
+                                            ),
                                         ));
 
                                         // New string -> reset current string being parsed
@@ -253,21 +260,29 @@ impl<R: Read> BencodeParser<R> {
                                             ParsingString::ParsingLength,
                                         ));
                                     }
-                                    ParsingDictionary::FirstKey => todo!(),
-                                    ParsingDictionary::FirstKeyValue => {
-                                        // First key value in the dictionary and it's an string
+                                    ParsingDictionary::FirstKeyValuePair(
+                                        parsing_first_key_value_pair,
+                                    ) => {
+                                        match parsing_first_key_value_pair {
+                                            ParsingKeyValuePair::Key => {
+                                                todo!()
+                                            }
+                                            ParsingKeyValuePair::Value => {
+                                                // First key value in the dictionary and it's an string
 
-                                        // New string -> reset current string being parsed
-                                        bytes_for_string_length = Vec::new();
-                                        string_length = 0;
-                                        string_bytes = Vec::new();
-                                        string_bytes_counter = 0;
+                                                // New string -> reset current string being parsed
+                                                bytes_for_string_length = Vec::new();
+                                                string_length = 0;
+                                                string_bytes = Vec::new();
+                                                string_bytes_counter = 0;
 
-                                        bytes_for_string_length.push(byte);
+                                                bytes_for_string_length.push(byte);
 
-                                        self.stack.push(State::ParsingString(
-                                            ParsingString::ParsingLength,
-                                        ));
+                                                self.stack.push(State::ParsingString(
+                                                    ParsingString::ParsingLength,
+                                                ));
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -352,8 +367,7 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingDictionary(parsing_dictionary) => {
                                 match parsing_dictionary {
                                     ParsingDictionary::Start => todo!(),
-                                    ParsingDictionary::FirstKey => todo!(),
-                                    ParsingDictionary::FirstKeyValue => todo!(),
+                                    ParsingDictionary::FirstKeyValuePair(_) => todo!(),
                                 }
                             }
                             State::ParsingInteger => {}
@@ -414,14 +428,22 @@ impl<R: Read> BencodeParser<R> {
                                         self.stack.pop();
                                         self.json.push('}');
                                     }
-                                    ParsingDictionary::FirstKey => todo!(),
-                                    ParsingDictionary::FirstKeyValue => {
-                                        // We have finished parsing the dictionary (non empty dictionary)
-                                        self.stack.pop(); // FirstKeyValue
+                                    ParsingDictionary::FirstKeyValuePair(
+                                        parsing_first_key_value,
+                                    ) => {
+                                        match parsing_first_key_value {
+                                            ParsingKeyValuePair::Key => todo!(),
+                                            ParsingKeyValuePair::Value => {
+                                                {
+                                                    // We have finished parsing the dictionary (non empty dictionary)
+                                                    self.stack.pop(); // FirstKeyValue
 
-                                        self.json.push('}');
+                                                    self.json.push('}');
 
-                                        self.stack.pop(); // Start
+                                                    self.stack.pop(); // Start
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -543,13 +565,20 @@ impl<R: Read> BencodeParser<R> {
                 State::ParsingList(_) => {}
                 State::ParsingDictionary(parsing_dictionary) => match parsing_dictionary {
                     ParsingDictionary::Start => {}
-                    ParsingDictionary::FirstKey => {
-                        self.stack.pop();
-                        self.stack
-                            .push(State::ParsingDictionary(ParsingDictionary::FirstKeyValue));
-                        self.json.push(':');
+                    ParsingDictionary::FirstKeyValuePair(parsing_first_key_value_pair) => {
+                        match parsing_first_key_value_pair {
+                            ParsingKeyValuePair::Key => {
+                                self.stack.pop();
+                                self.stack.push(State::ParsingDictionary(
+                                    ParsingDictionary::FirstKeyValuePair(
+                                        ParsingKeyValuePair::Value,
+                                    ),
+                                ));
+                                self.json.push(':');
+                            }
+                            ParsingKeyValuePair::Value => {}
+                        }
                     }
-                    ParsingDictionary::FirstKeyValue => {}
                 },
             },
             None => {}
