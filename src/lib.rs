@@ -857,7 +857,7 @@ mod tests {
             assert_eq!(parser.json, "{}".to_string());
         }
 
-        mod with_one_key {
+        mod with_one_key_of_type {
             use crate::BencodeParser;
 
             #[test]
@@ -878,6 +878,16 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(parser.json, "{\"bar\":\"spam\"}".to_string());
+            }
+
+            #[test]
+            fn non_utf8_string() {
+                let data = b"d3:bar2:\xFF\xFEe";
+
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "{\"bar\":\"<hex>fffe</hex>\"}".to_string());
             }
 
             /* todo:

@@ -30,7 +30,17 @@ Run the binary with stdin and stdout:
 
 ```console
 echo "4:spam" | cargo run
+"spam"
 ```
+
+Run the binary with stdin and stdout:
+
+```console
+printf "d3:bar2:\xFF\xFEe" | cargo run
+{"bar":"<hex>fffe</hex>"}
+```
+
+> NOTICE: We need two escape the two bytes `FF` and `FE` with `\x` inside the string.
 
 ## Test
 
