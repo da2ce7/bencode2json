@@ -36,11 +36,19 @@ pub enum ParsingKeyValuePair {
 }
 
 pub struct BencodeParser<R: Read> {
-    reader: R,
-    stack: Vec<State>,
     pub json: String,
     pub iter: u64,
     pub pos: u64,
+    reader: R,
+    stack: Vec<State>,
+}
+
+#[derive(Default, Debug)]
+struct CurrentStringBeingParsed {
+    pub bytes_for_string_length: Vec<u8>,
+    pub string_length: usize,
+    pub string_bytes: Vec<u8>,
+    pub string_bytes_counter: usize,
 }
 
 impl<R: Read> BencodeParser<R> {
@@ -69,12 +77,8 @@ impl<R: Read> BencodeParser<R> {
     #[allow(clippy::match_same_arms)]
     #[allow(clippy::single_match_else)]
     pub fn parse(&mut self) -> io::Result<()> {
-        // Current string being parsed
         // todo: use optional
-        let mut bytes_for_string_length = Vec::new();
-        let mut string_length = 0;
-        let mut string_bytes = Vec::new();
-        let mut string_bytes_counter = 0;
+        let mut current_string_being_parsed = CurrentStringBeingParsed::default();
 
         loop {
             let byte = match self.read_byte() {
@@ -90,10 +94,7 @@ impl<R: Read> BencodeParser<R> {
             println!("pos: {}", self.pos);
             println!("byte: {} ({})", byte, byte as char);
             println!("stack: {:#?}", self.stack);
-            println!("bytes_for_string_length: {bytes_for_string_length:?}");
-            println!("string_length: {string_length}");
-            println!("string_bytes: {string_bytes:?}");
-            println!("string_bytes_counter: {string_bytes_counter}");
+            println!("current_string_being_parsed: {current_string_being_parsed:#?}");
             println!("output: {}", self.json);
             println!();*/
 
@@ -140,16 +141,22 @@ impl<R: Read> BencodeParser<R> {
                                         panic!("unexpected byte 'i', parsing string length ")
                                     }
                                     ParsingString::ParsingChars => {
-                                        string_bytes.push(byte);
-                                        string_bytes_counter += 1;
-                                        if string_bytes_counter == string_length {
+                                        current_string_being_parsed.string_bytes.push(byte);
+                                        current_string_being_parsed.string_bytes_counter += 1;
+                                        if current_string_being_parsed.string_bytes_counter
+                                            == current_string_being_parsed.string_length
+                                        {
                                             // We have finishing capturing the string bytes
 
-                                            let string = match str::from_utf8(&string_bytes) {
+                                            let string = match str::from_utf8(
+                                                &current_string_being_parsed.string_bytes,
+                                            ) {
                                                 Ok(string) => string,
                                                 Err(_) => {
                                                     // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                    &bytes_to_hex(&string_bytes)
+                                                    &bytes_to_hex(
+                                                        &current_string_being_parsed.string_bytes,
+                                                    )
                                                 }
                                             };
 
@@ -178,19 +185,27 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // Add a digit for the string length
-                                    bytes_for_string_length.push(byte);
+                                    current_string_being_parsed
+                                        .bytes_for_string_length
+                                        .push(byte);
                                 }
                                 ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
+                                    current_string_being_parsed.string_bytes.push(byte);
+                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    if current_string_being_parsed.string_bytes_counter
+                                        == current_string_being_parsed.string_length
+                                    {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(&string_bytes) {
+                                        let string = match str::from_utf8(
+                                            &current_string_being_parsed.string_bytes,
+                                        ) {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
+                                                &bytes_to_hex(
+                                                    &current_string_being_parsed.string_bytes,
+                                                )
                                             }
                                         };
 
@@ -209,12 +224,15 @@ impl<R: Read> BencodeParser<R> {
                                         // First item in the list and it is a string
 
                                         // New string -> reset current string being parsed
-                                        bytes_for_string_length = Vec::new();
-                                        string_length = 0;
-                                        string_bytes = Vec::new();
-                                        string_bytes_counter = 0;
+                                        current_string_being_parsed.bytes_for_string_length =
+                                            Vec::new();
+                                        current_string_being_parsed.string_length = 0;
+                                        current_string_being_parsed.string_bytes = Vec::new();
+                                        current_string_being_parsed.string_bytes_counter = 0;
 
-                                        bytes_for_string_length.push(byte);
+                                        current_string_being_parsed
+                                            .bytes_for_string_length
+                                            .push(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -224,12 +242,15 @@ impl<R: Read> BencodeParser<R> {
                                         // Non first item in the list and it is a string
 
                                         // New string -> reset current string being parsed
-                                        bytes_for_string_length = Vec::new();
-                                        string_length = 0;
-                                        string_bytes = Vec::new();
-                                        string_bytes_counter = 0;
+                                        current_string_being_parsed.bytes_for_string_length =
+                                            Vec::new();
+                                        current_string_being_parsed.string_length = 0;
+                                        current_string_being_parsed.string_bytes = Vec::new();
+                                        current_string_being_parsed.string_bytes_counter = 0;
 
-                                        bytes_for_string_length.push(byte);
+                                        current_string_being_parsed
+                                            .bytes_for_string_length
+                                            .push(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -251,12 +272,15 @@ impl<R: Read> BencodeParser<R> {
                                         ));
 
                                         // New string -> reset current string being parsed
-                                        bytes_for_string_length = Vec::new();
-                                        string_length = 0;
-                                        string_bytes = Vec::new();
-                                        string_bytes_counter = 0;
+                                        current_string_being_parsed.bytes_for_string_length =
+                                            Vec::new();
+                                        current_string_being_parsed.string_length = 0;
+                                        current_string_being_parsed.string_bytes = Vec::new();
+                                        current_string_being_parsed.string_bytes_counter = 0;
 
-                                        bytes_for_string_length.push(byte);
+                                        current_string_being_parsed
+                                            .bytes_for_string_length
+                                            .push(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -273,12 +297,17 @@ impl<R: Read> BencodeParser<R> {
                                                 // First key value in the dictionary and it's an string
 
                                                 // New string -> reset current string being parsed
-                                                bytes_for_string_length = Vec::new();
-                                                string_length = 0;
-                                                string_bytes = Vec::new();
-                                                string_bytes_counter = 0;
+                                                current_string_being_parsed
+                                                    .bytes_for_string_length = Vec::new();
+                                                current_string_being_parsed.string_length = 0;
+                                                current_string_being_parsed.string_bytes =
+                                                    Vec::new();
+                                                current_string_being_parsed.string_bytes_counter =
+                                                    0;
 
-                                                bytes_for_string_length.push(byte);
+                                                current_string_being_parsed
+                                                    .bytes_for_string_length
+                                                    .push(byte);
 
                                                 self.stack.push(State::ParsingString(
                                                     ParsingString::ParsingLength,
@@ -296,12 +325,14 @@ impl<R: Read> BencodeParser<R> {
                                 .push(State::ParsingString(ParsingString::ParsingLength));
 
                             // New string -> reset current string being parsed
-                            bytes_for_string_length = Vec::new();
-                            string_length = 0;
-                            string_bytes = Vec::new();
-                            string_bytes_counter = 0;
+                            current_string_being_parsed.bytes_for_string_length = Vec::new();
+                            current_string_being_parsed.string_length = 0;
+                            current_string_being_parsed.string_bytes = Vec::new();
+                            current_string_being_parsed.string_bytes_counter = 0;
 
-                            bytes_for_string_length.push(byte);
+                            current_string_being_parsed
+                                .bytes_for_string_length
+                                .push(byte);
                         }
                     };
                 }
@@ -311,11 +342,13 @@ impl<R: Read> BencodeParser<R> {
                             match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // We reach the end of the string length
-                                    let length_str = str::from_utf8(&bytes_for_string_length)
-                                        .expect("non UTF8 string length");
+                                    let length_str = str::from_utf8(
+                                        &current_string_being_parsed.bytes_for_string_length,
+                                    )
+                                    .expect("non UTF8 string length");
                                     //println!("length_str: {length_str}");
 
-                                    string_length = length_str
+                                    current_string_being_parsed.string_length = length_str
                                         .parse::<usize>()
                                         .expect("invalid number for string length");
                                     //println!("string_length_number: {string_length}");
@@ -328,16 +361,22 @@ impl<R: Read> BencodeParser<R> {
                                         .push(State::ParsingString(ParsingString::ParsingChars));
                                 }
                                 ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
+                                    current_string_being_parsed.string_bytes.push(byte);
+                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    if current_string_being_parsed.string_bytes_counter
+                                        == current_string_being_parsed.string_length
+                                    {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(&string_bytes) {
+                                        let string = match str::from_utf8(
+                                            &current_string_being_parsed.string_bytes,
+                                        ) {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
+                                                &bytes_to_hex(
+                                                    &current_string_being_parsed.string_bytes,
+                                                )
                                             }
                                         };
 
@@ -380,16 +419,22 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'l', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
+                                    current_string_being_parsed.string_bytes.push(byte);
+                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    if current_string_being_parsed.string_bytes_counter
+                                        == current_string_being_parsed.string_length
+                                    {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(&string_bytes) {
+                                        let string = match str::from_utf8(
+                                            &current_string_being_parsed.string_bytes,
+                                        ) {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
+                                                &bytes_to_hex(
+                                                    &current_string_being_parsed.string_bytes,
+                                                )
                                             }
                                         };
 
@@ -461,16 +506,22 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'e', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
+                                    current_string_being_parsed.string_bytes.push(byte);
+                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    if current_string_being_parsed.string_bytes_counter
+                                        == current_string_being_parsed.string_length
+                                    {
                                         // We have finishing parsing the string
 
-                                        let string = match str::from_utf8(&string_bytes) {
+                                        let string = match str::from_utf8(
+                                            &current_string_being_parsed.string_bytes,
+                                        ) {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
+                                                &bytes_to_hex(
+                                                    &current_string_being_parsed.string_bytes,
+                                                )
                                             }
                                         };
 
@@ -498,16 +549,22 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {}
                                 ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
+                                    current_string_being_parsed.string_bytes.push(byte);
+                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    if current_string_being_parsed.string_bytes_counter
+                                        == current_string_being_parsed.string_length
+                                    {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(&string_bytes) {
+                                        let string = match str::from_utf8(
+                                            &current_string_being_parsed.string_bytes,
+                                        ) {
                                             Ok(string) => string,
                                             Err(_) => {
                                                 // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
+                                                &bytes_to_hex(
+                                                    &current_string_being_parsed.string_bytes,
+                                                )
                                             }
                                         };
 
