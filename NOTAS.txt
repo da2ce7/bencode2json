@@ -24,3 +24,6 @@ Para poder anidar los casos (agruparlos como están ahora)
   sigo con los casos de las listas y más casos. Pero mejor terminar este último
   tipo.
 - Seguir con listas aninadas.
+- Estaría bien poder ejecutar la batería de test contra otras implementaciones como la de C.
+  Para eso si estaría bien tener una lista de casos (data provider para los test unitoarios).
+  Para usar la misma lista para el test E2E del otro programa.

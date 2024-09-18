@@ -24,9 +24,9 @@ pub enum ParsingList {
 
 #[derive(Debug, PartialEq)]
 pub enum ParsingDictionary {
-    Start,        // d
-    ExpectingKey, // e
-    EndKeyValue,  // f
+    Start,         // d
+    FirstKey,      // e
+    FirstKeyValue, // f
 }
 
 pub struct BencodeParser<R: Read> {
@@ -88,55 +88,69 @@ impl<R: Read> BencodeParser<R> {
             println!("string_length: {string_length}");
             println!("string_bytes: {string_bytes:?}");
             println!("string_bytes_counter: {string_bytes_counter}");
-            println!("output: {}", self.output);
+            println!("output: {}", self.json);
             println!();*/
 
             match byte {
                 b'i' => {
                     match self.stack.last() {
-                        Some(state) => match state {
-                            State::ParsingList(parsing_list) => match parsing_list {
-                                ParsingList::Start => {
-                                    self.stack.push(State::ParsingInteger);
-                                }
-                                ParsingList::Rest => {
-                                    self.stack.push(State::ParsingInteger);
-                                    self.json.push(',');
-                                }
-                            },
-                            State::ParsingDictionary(_) => {
-                                panic!("invalid byte, expected list item")
-                            }
-                            State::ParsingInteger => {
-                                panic!("invalid byte, parsing integer expected digit")
-                            }
-                            State::ParsingString(parsing_string) => match parsing_string {
-                                ParsingString::ParsingLength => {
-                                    panic!("unexpected byte 'i', parsing string length ")
-                                }
-                                ParsingString::ParsingChars => {
-                                    string_bytes.push(byte);
-                                    string_bytes_counter += 1;
-                                    if string_bytes_counter == string_length {
-                                        // We have finishing capturing the string bytes
-
-                                        let string = match str::from_utf8(&string_bytes) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(&string_bytes)
-                                            }
-                                        };
-
-                                        self.json.push_str(&format!("\"{string}\""));
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
+                        Some(state) => {
+                            match state {
+                                State::ParsingList(parsing_list) => match parsing_list {
+                                    ParsingList::Start => {
+                                        self.stack.push(State::ParsingInteger);
+                                    }
+                                    ParsingList::Rest => {
+                                        self.stack.push(State::ParsingInteger);
+                                        self.json.push(',');
+                                    }
+                                },
+                                State::ParsingDictionary(parsing_dictionary) => {
+                                    match parsing_dictionary {
+                                        ParsingDictionary::Start => {
+                                            panic!("invalid byte 'i', expecting string for dictionary key");
+                                        }
+                                        ParsingDictionary::FirstKey => {
+                                            panic!("invalid byte 'i', dictionary key can't be an integer");
+                                        }
+                                        ParsingDictionary::FirstKeyValue => {
+                                            // First key value in the dictionary is an integer
+                                            self.stack.push(State::ParsingInteger);
+                                        }
                                     }
                                 }
-                            },
-                        },
+                                State::ParsingInteger => {
+                                    panic!("invalid byte, parsing integer expected digit")
+                                }
+                                State::ParsingString(parsing_string) => match parsing_string {
+                                    ParsingString::ParsingLength => {
+                                        panic!("unexpected byte 'i', parsing string length ")
+                                    }
+                                    ParsingString::ParsingChars => {
+                                        string_bytes.push(byte);
+                                        string_bytes_counter += 1;
+                                        if string_bytes_counter == string_length {
+                                            // We have finishing capturing the string bytes
+
+                                            let string = match str::from_utf8(&string_bytes) {
+                                                Ok(string) => string,
+                                                Err(_) => {
+                                                    // String contains non valid UTF-8 chars -> print as hex bytes list
+                                                    &bytes_to_hex(&string_bytes)
+                                                }
+                                            };
+
+                                            self.json.push_str(&format!("\"{string}\""));
+
+                                            // We have finished parsing the string
+                                            self.stack.pop();
+                                            self.check_first_list_item();
+                                            self.check_end_dictionary_key();
+                                        }
+                                    }
+                                },
+                            }
+                        }
                         None => {
                             self.stack.push(State::ParsingInteger);
                         }
@@ -172,6 +186,7 @@ impl<R: Read> BencodeParser<R> {
                                         // We have finished parsing the string
                                         self.stack.pop();
                                         self.check_first_list_item();
+                                        self.check_end_dictionary_key();
                                     }
                                 }
                             },
@@ -211,7 +226,31 @@ impl<R: Read> BencodeParser<R> {
                                     }
                                 }
                             }
-                            State::ParsingDictionary(_parsing_dictionary) => todo!(),
+                            State::ParsingDictionary(parsing_dictionary) => {
+                                match parsing_dictionary {
+                                    ParsingDictionary::Start => {
+                                        // First key in the dictionary
+
+                                        self.stack.push(State::ParsingDictionary(
+                                            ParsingDictionary::FirstKey,
+                                        ));
+
+                                        // New string -> reset current string being parsed
+                                        bytes_for_string_length = Vec::new();
+                                        string_length = 0;
+                                        string_bytes = Vec::new();
+                                        string_bytes_counter = 0;
+
+                                        bytes_for_string_length.push(byte);
+
+                                        self.stack.push(State::ParsingString(
+                                            ParsingString::ParsingLength,
+                                        ));
+                                    }
+                                    ParsingDictionary::FirstKey => todo!(),
+                                    ParsingDictionary::FirstKeyValue => todo!(),
+                                }
+                            }
                         },
                         None => {
                             // First byte in input and it is a string
@@ -269,6 +308,7 @@ impl<R: Read> BencodeParser<R> {
                                         // We have finished parsing the string
                                         self.stack.pop();
                                         self.check_first_list_item();
+                                        self.check_end_dictionary_key();
                                     }
                                 }
                             }
@@ -289,8 +329,12 @@ impl<R: Read> BencodeParser<R> {
                                 }
                                 ParsingList::Rest => {}
                             },
-                            State::ParsingDictionary(_) => {
-                                panic!("invalid byte, expected list item")
+                            State::ParsingDictionary(parsing_dictionary) => {
+                                match parsing_dictionary {
+                                    ParsingDictionary::Start => todo!(),
+                                    ParsingDictionary::FirstKey => todo!(),
+                                    ParsingDictionary::FirstKeyValue => todo!(),
+                                }
                             }
                             State::ParsingInteger => {}
                             State::ParsingString(parsing_string) => match parsing_string {
@@ -316,6 +360,7 @@ impl<R: Read> BencodeParser<R> {
                                         // We have finished parsing the string
                                         self.stack.pop();
                                         self.check_first_list_item();
+                                        self.check_end_dictionary_key();
                                     }
                                 }
                             },
@@ -349,8 +394,15 @@ impl<R: Read> BencodeParser<R> {
                                         self.stack.pop();
                                         self.json.push('}');
                                     }
-                                    ParsingDictionary::ExpectingKey => todo!(),
-                                    ParsingDictionary::EndKeyValue => todo!(),
+                                    ParsingDictionary::FirstKey => todo!(),
+                                    ParsingDictionary::FirstKeyValue => {
+                                        // We have finished parsing the dictionary (non empty dictionary)
+                                        self.stack.pop(); // FirstKeyValue
+
+                                        self.json.push('}');
+
+                                        self.stack.pop(); // Start
+                                    }
                                 }
                             }
                             State::ParsingInteger => {
@@ -380,6 +432,7 @@ impl<R: Read> BencodeParser<R> {
                                         // We have finished parsing the string
                                         self.stack.pop();
                                         self.check_first_list_item();
+                                        self.check_end_dictionary_key();
                                     }
                                 }
                             },
@@ -416,6 +469,7 @@ impl<R: Read> BencodeParser<R> {
                                         // We have finished parsing the string
                                         self.stack.pop();
                                         self.check_first_list_item();
+                                        self.check_end_dictionary_key();
                                     }
                                 }
                             },
@@ -459,15 +513,28 @@ impl<R: Read> BencodeParser<R> {
         }
     }
 
-    /*fn _read_n_bytes(&mut self, n: usize) -> io::Result<Vec<u8>> {
-        let mut bytes = Vec::new();
-
-        for _i in 1..=n {
-            bytes.push(self.read_byte()?);
+    #[allow(clippy::single_match)]
+    #[allow(clippy::match_same_arms)]
+    fn check_end_dictionary_key(&mut self) {
+        match self.stack.last() {
+            Some(state) => match state {
+                State::ParsingInteger => {}
+                State::ParsingString(_) => {}
+                State::ParsingList(_) => {}
+                State::ParsingDictionary(parsing_dictionary) => match parsing_dictionary {
+                    ParsingDictionary::Start => {}
+                    ParsingDictionary::FirstKey => {
+                        self.stack.pop();
+                        self.stack
+                            .push(State::ParsingDictionary(ParsingDictionary::FirstKeyValue));
+                        self.json.push(':');
+                    }
+                    ParsingDictionary::FirstKeyValue => {}
+                },
+            },
+            None => {}
         }
-
-        Ok(bytes)
-    }*/
+    }
 }
 
 fn bytes_to_hex(data: &[u8]) -> String {
@@ -764,6 +831,8 @@ mod tests {
     mod dictionary {
         use crate::BencodeParser;
 
+        // Note: Keys must be bencoded strings.
+
         #[test]
         fn empty_dictionary() {
             let data = b"de";
@@ -786,6 +855,21 @@ mod tests {
 
                 assert_eq!(parser.json, "{\"foo\":42}".to_string());
             }
+
+            /* todo:
+
+               Valid cases:
+
+               - A key starting with a digit.
+               - A key with non UTF-8 value:
+                    Bencode: d2:\xFF\xFEi42ee
+                    JSON:    {"<hex>fffe</hex>": 42}
+
+               Error cases:
+
+               - A dictionary key can't be an integer.
+               - A dictionary with one key pair, but only the key without value.
+            */
         }
     }
 }
