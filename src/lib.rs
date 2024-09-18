@@ -66,6 +66,23 @@ impl CurrentStringBeingParsed {
     fn has_finishing_capturing_bytes(&self) -> bool {
         self.string_bytes_counter == self.string_length
     }
+
+    fn utf8(&self) -> String {
+        match str::from_utf8(&self.string_bytes) {
+            Ok(string) => {
+                // String only contains valid UTF-8 chars -> print it as it's
+                string.to_owned()
+            }
+            Err(_) => {
+                // String contains non valid UTF-8 chars -> print it as hex bytes
+                Self::bytes_to_hex(&self.string_bytes)
+            }
+        }
+    }
+
+    fn bytes_to_hex(data: &[u8]) -> String {
+        format!("<hex>{}</hex>", hex::encode(data))
+    }
 }
 
 impl<R: Read> BencodeParser<R> {
@@ -165,17 +182,7 @@ impl<R: Read> BencodeParser<R> {
                                         {
                                             // We have finishing capturing the string bytes
 
-                                            let string = match str::from_utf8(
-                                                &current_string_being_parsed.string_bytes,
-                                            ) {
-                                                Ok(string) => string,
-                                                Err(_) => {
-                                                    // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                    &bytes_to_hex(
-                                                        &current_string_being_parsed.string_bytes,
-                                                    )
-                                                }
-                                            };
+                                            let string = current_string_being_parsed.utf8();
 
                                             self.json.push_str(&format!("\"{string}\""));
 
@@ -212,17 +219,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(
-                                            &current_string_being_parsed.string_bytes,
-                                        ) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(
-                                                    &current_string_being_parsed.string_bytes,
-                                                )
-                                            }
-                                        };
+                                        let string = current_string_being_parsed.utf8();
 
                                         self.json.push_str(&format!("\"{string}\""));
 
@@ -381,17 +378,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(
-                                            &current_string_being_parsed.string_bytes,
-                                        ) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(
-                                                    &current_string_being_parsed.string_bytes,
-                                                )
-                                            }
-                                        };
+                                        let string = current_string_being_parsed.utf8();
 
                                         self.json.push_str(&format!("\"{string}\""));
 
@@ -437,17 +424,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(
-                                            &current_string_being_parsed.string_bytes,
-                                        ) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(
-                                                    &current_string_being_parsed.string_bytes,
-                                                )
-                                            }
-                                        };
+                                        let string = current_string_being_parsed.utf8();
 
                                         self.json.push_str(&format!("\"{string}\""));
 
@@ -522,17 +499,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing parsing the string
 
-                                        let string = match str::from_utf8(
-                                            &current_string_being_parsed.string_bytes,
-                                        ) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(
-                                                    &current_string_being_parsed.string_bytes,
-                                                )
-                                            }
-                                        };
+                                        let string = current_string_being_parsed.utf8();
 
                                         self.json.push_str(&format!("\"{string}\""));
 
@@ -563,17 +530,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = match str::from_utf8(
-                                            &current_string_being_parsed.string_bytes,
-                                        ) {
-                                            Ok(string) => string,
-                                            Err(_) => {
-                                                // String contains non valid UTF-8 chars -> print as hex bytes list
-                                                &bytes_to_hex(
-                                                    &current_string_being_parsed.string_bytes,
-                                                )
-                                            }
-                                        };
+                                        let string = current_string_being_parsed.utf8();
 
                                         self.json.push_str(&format!("\"{string}\""));
 
@@ -654,10 +611,6 @@ impl<R: Read> BencodeParser<R> {
             None => {}
         }
     }
-}
-
-fn bytes_to_hex(data: &[u8]) -> String {
-    format!("<hex>{}</hex>", hex::encode(data))
 }
 
 #[cfg(test)]
