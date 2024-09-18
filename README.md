@@ -20,15 +20,13 @@ More info: <https://github.com/torrust/teps/discussions/15>
 
 ## Run
 
-To run the binary:
-
-### With input and output file
+Run the binary with input and output file:
 
 ```console
 cargo run -- -i tests/sample.bencode -o output.json
 ```
 
-### With stdin and stdout
+Run the binary with stdin and stdout:
 
 ```console
 echo "4:spam" | cargo run
@@ -36,10 +34,18 @@ echo "4:spam" | cargo run
 
 ## Test
 
-To run unit and integration tests:
+Run unit and integration tests:
 
 ```console
 cargo test
+```
+
+We have included a copy of another [C implementation "be2json.c"](./contrib/be2json.c). You can execute it with the following:
+
+```console
+gcc ./contrib/be2json.c -o be2json
+chmod +x ./be2json
+echo "4:spam" | ./be2json
 ```
 
 ## TODO
@@ -64,7 +70,7 @@ Bencode online:
 
 ## Credits
 
-THis implementation is basically a port to Rust from <https://gist.github.com/camilleoudot/840929699392b3d25afbec25d850c94a> with some changes like:
+This implementation is basically a port to Rust from <https://gist.github.com/camilleoudot/840929699392b3d25afbec25d850c94a> with some changes like:
 
 - It does not use magic numbers (explicit enum for states).
 - It prints non UTF-8 string in hexadecimal.

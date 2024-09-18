@@ -773,5 +773,19 @@ mod tests {
 
             assert_eq!(parser.json, "{}".to_string());
         }
+
+        mod with_one_key {
+            use crate::BencodeParser;
+
+            #[test]
+            fn integer() {
+                let data = b"d3:fooi42ee";
+
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "{\"foo\":42}".to_string());
+            }
+        }
     }
 }
