@@ -26,6 +26,7 @@ pub enum ParsingList {
 pub enum ParsingDictionary {
     Start,
     FirstKeyValuePair(ParsingKeyValuePair),
+    NextKeyValuePair(ParsingKeyValuePair),
 }
 
 #[derive(Debug, PartialEq)]
@@ -128,6 +129,7 @@ impl<R: Read> BencodeParser<R> {
                                                 }
                                             }
                                         }
+                                        ParsingDictionary::NextKeyValuePair(_) => todo!(),
                                     }
                                 }
                                 State::ParsingInteger => {
@@ -284,6 +286,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         }
                                     }
+                                    ParsingDictionary::NextKeyValuePair(_) => todo!(),
                                 }
                             }
                         },
@@ -368,6 +371,7 @@ impl<R: Read> BencodeParser<R> {
                                 match parsing_dictionary {
                                     ParsingDictionary::Start => todo!(),
                                     ParsingDictionary::FirstKeyValuePair(_) => todo!(),
+                                    ParsingDictionary::NextKeyValuePair(_) => todo!(),
                                 }
                             }
                             State::ParsingInteger => {}
@@ -445,6 +449,7 @@ impl<R: Read> BencodeParser<R> {
                                             }
                                         }
                                     }
+                                    ParsingDictionary::NextKeyValuePair(_) => todo!(),
                                 }
                             }
                             State::ParsingInteger => {
@@ -579,6 +584,7 @@ impl<R: Read> BencodeParser<R> {
                             ParsingKeyValuePair::Value => {}
                         }
                     }
+                    ParsingDictionary::NextKeyValuePair(_) => todo!(),
                 },
             },
             None => {}
