@@ -20,10 +20,41 @@
 - Si hago lo del data provider para los tests, la estructura puede ser un strcut 
 quepuede contener un caso (title, beencode, expected json) o un vector de este enum.
 Para poder anidar los casos (agruparlos como están ahora)
-- HAcer un caso siple de diccionario por si fastidia todo el invento. Luego
+
+- State -> 
+    StackValue
+    ParsingState
+    
+pub enum State {
+    ParsingInteger,
+    ParsingString(ParsingString),
+    ParsingList(ParsingList),
+    ParsingDictionary(ParsingDictionary),
+}
+
+pub enum ParsingState {
+    Integer,
+    String(ParsingString),
+    List(ParsingList),
+    Dictionary(ParsingDictionary),
+}
+
+- mover a mod stack los enums y el stack.
+- extraer duplicados de empezar string porque voya meter un montón de duplicados para el segundo key-value pair.
+- Y tambiénlas acciones que se hacen después de parsear los typs básicos integer o string de actualizar el estado.
+- Podría contar el número de items en la lista en vez de tener dos estados. Que el estado tengo un contador. 
+  Creo que se pueden simplificar los estados eliminando la diferencia entre primer y subsecuentes items en listas y diccionarios.
+  EL elemento padre, puede contener un valor en el stack que sea cuantos elementos tiene (items or key-value pairs).
+  Cuando se empieza a parsear un nuevo item, se mira en la pila cuantos elementos tiene el padre para saber si es el primero o no.
+  Esto no lo hice así porque era un coñazo manipular el top de la pila. Pero cuando esté refactorizado a lo mejor no es tan coñazo
+  porque se puede pregutar si el top de la pila es una lista y esta vacia o que devuelva el número de elementos de la pila si el top es una lista, etc.
+
+  - HAcer un caso siple de diccionario por si fastidia todo el invento. Luego
   sigo con los casos de las listas y más casos. Pero mejor terminar este último
   tipo.
 - Seguir con listas aninadas.
 - Estaría bien poder ejecutar la batería de test contra otras implementaciones como la de C.
   Para eso si estaría bien tener una lista de casos (data provider para los test unitoarios).
   Para usar la misma lista para el test E2E del otro programa.
+
+
