@@ -15,18 +15,24 @@ pub enum ParsingString {
     ParsingChars,
 }
 
-/// l y m
 #[derive(Debug, PartialEq)]
 pub enum ParsingList {
-    Start, // l
-    Rest,  // m
+    Start,
+    // review: add FirstItem? to make it clear
+    Rest,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum ParsingDictionary {
-    Start,         // d
-    FirstKey,      // e
-    FirstKeyValue, // f
+    Start,
+    FirstKey,
+    FirstKeyValue,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ParsingKeyValuePair {
+    Key,
+    Value,
 }
 
 pub struct BencodeParser<R: Read> {
@@ -847,6 +853,21 @@ mod tests {
 
         // Note: Keys must be bencoded strings.
 
+        /* todo:
+
+           Valid cases:
+
+           - A key starting with a digit.
+           - A key with non UTF-8 value:
+                Bencode: d2:\xFF\xFEi42ee
+                JSON:    {"<hex>fffe</hex>": 42}
+
+           Error cases:
+
+           - A dictionary key can't be an integer.
+           - A dictionary with one key pair, but only the key without value.
+        */
+
         #[test]
         fn empty_dictionary() {
             let data = b"de";
@@ -889,21 +910,21 @@ mod tests {
 
                 assert_eq!(parser.json, "{\"bar\":\"<hex>fffe</hex>\"}".to_string());
             }
+        }
 
-            /* todo:
+        mod with_two_keys_of_the_same_type {
+            use crate::BencodeParser;
 
-               Valid cases:
+            #[test]
+            #[ignore]
+            fn two_integers() {
+                let data = b"d3:bari42e3:fooi43ee";
 
-               - A key starting with a digit.
-               - A key with non UTF-8 value:
-                    Bencode: d2:\xFF\xFEi42ee
-                    JSON:    {"<hex>fffe</hex>": 42}
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
 
-               Error cases:
-
-               - A dictionary key can't be an integer.
-               - A dictionary with one key pair, but only the key without value.
-            */
+                assert_eq!(parser.json, "{\"bar\":42,\"foo\":43}".to_string());
+            }
         }
     }
 }
