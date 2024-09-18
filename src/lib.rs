@@ -248,7 +248,21 @@ impl<R: Read> BencodeParser<R> {
                                         ));
                                     }
                                     ParsingDictionary::FirstKey => todo!(),
-                                    ParsingDictionary::FirstKeyValue => todo!(),
+                                    ParsingDictionary::FirstKeyValue => {
+                                        // First key value in the dictionary and it's an string
+
+                                        // New string -> reset current string being parsed
+                                        bytes_for_string_length = Vec::new();
+                                        string_length = 0;
+                                        string_bytes = Vec::new();
+                                        string_bytes_counter = 0;
+
+                                        bytes_for_string_length.push(byte);
+
+                                        self.stack.push(State::ParsingString(
+                                            ParsingString::ParsingLength,
+                                        ));
+                                    }
                                 }
                             }
                         },
@@ -854,6 +868,16 @@ mod tests {
                 parser.parse().unwrap();
 
                 assert_eq!(parser.json, "{\"foo\":42}".to_string());
+            }
+
+            #[test]
+            fn utf8_string() {
+                let data = b"d3:bar4:spame";
+
+                let mut parser = BencodeParser::new(&data[..]);
+                parser.parse().unwrap();
+
+                assert_eq!(parser.json, "{\"bar\":\"spam\"}".to_string());
             }
 
             /* todo:
