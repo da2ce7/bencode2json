@@ -94,7 +94,7 @@ impl<R: Read> BencodeParser<R> {
             match byte {
                 b'i' => {
                     match self.stack.last() {
-                        Some(head) => match head {
+                        Some(state) => match state {
                             State::ParsingList(parsing_list) => match parsing_list {
                                 ParsingList::Start => {
                                     self.stack.push(State::ParsingInteger);
@@ -143,8 +143,6 @@ impl<R: Read> BencodeParser<R> {
                     }
                 }
                 b'0'..=b'9' => {
-                    // State machine
-
                     match self.stack.last() {
                         Some(state) => match state {
                             State::ParsingInteger => {
@@ -283,7 +281,7 @@ impl<R: Read> BencodeParser<R> {
                 },
                 b'l' => {
                     match self.stack.last() {
-                        Some(head) => match head {
+                        Some(state) => match state {
                             State::ParsingList(parsing_list) => match parsing_list {
                                 ParsingList::Start => {
                                     self.stack.push(State::ParsingList(ParsingList::Start));
@@ -328,16 +326,32 @@ impl<R: Read> BencodeParser<R> {
                         }
                     }
                 }
+                b'd' => match self.stack.last() {
+                    Some(_) => todo!(),
+                    None => {
+                        self.stack
+                            .push(State::ParsingDictionary(ParsingDictionary::Start));
+                        self.json.push('{');
+                    }
+                },
                 b'e' => {
                     match self.stack.last() {
-                        Some(head) => match head {
+                        Some(state) => match state {
                             State::ParsingList(_) => {
                                 // We have finished parsing the list
                                 self.stack.pop();
                                 self.json.push(']');
                             }
-                            State::ParsingDictionary(_) => {
-                                panic!("invalid byte, expected list item")
+                            State::ParsingDictionary(parsing_dictionary) => {
+                                match parsing_dictionary {
+                                    ParsingDictionary::Start => {
+                                        // We have finished parsing the dictionary (empty dictionary)
+                                        self.stack.pop();
+                                        self.json.push('}');
+                                    }
+                                    ParsingDictionary::ExpectingKey => todo!(),
+                                    ParsingDictionary::EndKeyValue => todo!(),
+                                }
                             }
                             State::ParsingInteger => {
                                 // We have finished parsing the integer
@@ -377,7 +391,7 @@ impl<R: Read> BencodeParser<R> {
                 }
                 _ => {
                     match self.stack.last() {
-                        Some(head) => match head {
+                        Some(state) => match state {
                             State::ParsingList(_) => {}
                             State::ParsingDictionary(_) => {}
                             State::ParsingInteger => {}
@@ -413,6 +427,8 @@ impl<R: Read> BencodeParser<R> {
 
             self.iter += 1;
         }
+
+        // todo: if we exit the loop with a non empty stack, that's an error (incomplete bencode value).
 
         Ok(())
     }
@@ -742,6 +758,20 @@ mod tests {
                 - Non UTF-8 string and list
                 - Non UTF-8 string and dictionary
             */
+        }
+    }
+
+    mod dictionary {
+        use crate::BencodeParser;
+
+        #[test]
+        fn empty_dictionary() {
+            let data = b"de";
+
+            let mut parser = BencodeParser::new(&data[..]);
+            parser.parse().unwrap();
+
+            assert_eq!(parser.json, "{}".to_string());
         }
     }
 }

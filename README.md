@@ -47,6 +47,7 @@ cargo test
 - Counter for number of items in a list for debugging and errors.
 - Return errors with position.
 - Use Property-Based Testing. Generate random valid bencoded values.
+- Refactor: Use only one tests with a data provider containing all cases.
 
 ## Alternatives
 

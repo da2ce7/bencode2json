@@ -17,5 +17,10 @@
                     // Bueno es un lenguage con un solo elemento que puede tener 4 tipos.
 
 - Podría contar el número de items en la lista en vez de tener dos estados. Que el estado tengo un contador.                    
-- Puedo hacer las listas aninadas.
-
+- Si hago lo del data provider para los tests, la estructura puede ser un strcut 
+quepuede contener un caso (title, beencode, expected json) o un vector de este enum.
+Para poder anidar los casos (agruparlos como están ahora)
+- HAcer un caso siple de diccionario por si fastidia todo el invento. Luego
+  sigo con los casos de las listas y más casos. Pero mejor terminar este último
+  tipo.
+- Seguir con listas aninadas.
