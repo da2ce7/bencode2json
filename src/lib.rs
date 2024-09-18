@@ -51,6 +51,13 @@ struct CurrentStringBeingParsed {
     pub string_bytes_counter: usize,
 }
 
+impl CurrentStringBeingParsed {
+    fn push(&mut self, byte: u8) {
+        self.string_bytes.push(byte);
+        self.string_bytes_counter += 1;
+    }
+}
+
 impl<R: Read> BencodeParser<R> {
     pub fn new(reader: R) -> Self {
         BencodeParser {
@@ -141,8 +148,8 @@ impl<R: Read> BencodeParser<R> {
                                         panic!("unexpected byte 'i', parsing string length ")
                                     }
                                     ParsingString::ParsingChars => {
-                                        current_string_being_parsed.string_bytes.push(byte);
-                                        current_string_being_parsed.string_bytes_counter += 1;
+                                        current_string_being_parsed.push(byte);
+
                                         if current_string_being_parsed.string_bytes_counter
                                             == current_string_being_parsed.string_length
                                         {
@@ -190,8 +197,8 @@ impl<R: Read> BencodeParser<R> {
                                         .push(byte);
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.string_bytes.push(byte);
-                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    current_string_being_parsed.push(byte);
+
                                     if current_string_being_parsed.string_bytes_counter
                                         == current_string_being_parsed.string_length
                                     {
@@ -361,8 +368,8 @@ impl<R: Read> BencodeParser<R> {
                                         .push(State::ParsingString(ParsingString::ParsingChars));
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.string_bytes.push(byte);
-                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    current_string_being_parsed.push(byte);
+
                                     if current_string_being_parsed.string_bytes_counter
                                         == current_string_being_parsed.string_length
                                     {
@@ -419,8 +426,8 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'l', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.string_bytes.push(byte);
-                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    current_string_being_parsed.push(byte);
+
                                     if current_string_being_parsed.string_bytes_counter
                                         == current_string_being_parsed.string_length
                                     {
@@ -506,8 +513,8 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'e', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.string_bytes.push(byte);
-                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    current_string_being_parsed.push(byte);
+
                                     if current_string_being_parsed.string_bytes_counter
                                         == current_string_being_parsed.string_length
                                     {
@@ -549,8 +556,8 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {}
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.string_bytes.push(byte);
-                                    current_string_being_parsed.string_bytes_counter += 1;
+                                    current_string_being_parsed.push(byte);
+
                                     if current_string_being_parsed.string_bytes_counter
                                         == current_string_being_parsed.string_length
                                     {
