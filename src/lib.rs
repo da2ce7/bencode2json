@@ -64,6 +64,12 @@ impl CurrentStringBeingParsed {
         self.string_bytes_counter = 0;
     }
 
+    fn add_length_byte(&mut self, byte: u8) {
+        // todo: should we fail here is the byte is not a digit (0..9)?
+        // or we can wait until we try to convert all bytes in the into a number?
+        self.bytes_for_string_length.push(byte);
+    }
+
     fn add_byte(&mut self, byte: u8) {
         // todo: return an error if we try to push a new byte but the end of the
         // string has been reached.
@@ -218,9 +224,7 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // Add a digit for the string length
-                                    current_string_being_parsed
-                                        .bytes_for_string_length
-                                        .push(byte);
+                                    current_string_being_parsed.add_length_byte(byte);
                                 }
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
@@ -246,9 +250,7 @@ impl<R: Read> BencodeParser<R> {
 
                                         current_string_being_parsed.reset();
 
-                                        current_string_being_parsed
-                                            .bytes_for_string_length
-                                            .push(byte);
+                                        current_string_being_parsed.add_length_byte(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -259,9 +261,7 @@ impl<R: Read> BencodeParser<R> {
 
                                         current_string_being_parsed.reset();
 
-                                        current_string_being_parsed
-                                            .bytes_for_string_length
-                                            .push(byte);
+                                        current_string_being_parsed.add_length_byte(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -284,9 +284,7 @@ impl<R: Read> BencodeParser<R> {
 
                                         current_string_being_parsed.reset();
 
-                                        current_string_being_parsed
-                                            .bytes_for_string_length
-                                            .push(byte);
+                                        current_string_being_parsed.add_length_byte(byte);
 
                                         self.stack.push(State::ParsingString(
                                             ParsingString::ParsingLength,
@@ -304,9 +302,7 @@ impl<R: Read> BencodeParser<R> {
 
                                                 current_string_being_parsed.reset();
 
-                                                current_string_being_parsed
-                                                    .bytes_for_string_length
-                                                    .push(byte);
+                                                current_string_being_parsed.add_length_byte(byte);
 
                                                 self.stack.push(State::ParsingString(
                                                     ParsingString::ParsingLength,
@@ -325,9 +321,7 @@ impl<R: Read> BencodeParser<R> {
 
                             current_string_being_parsed.reset();
 
-                            current_string_being_parsed
-                                .bytes_for_string_length
-                                .push(byte);
+                            current_string_being_parsed.add_length_byte(byte);
                         }
                     };
                 }
