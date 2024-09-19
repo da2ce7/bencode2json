@@ -215,18 +215,7 @@ impl<R: Read> BencodeParser<R> {
                                         panic!("unexpected byte 'i', parsing string length ")
                                     }
                                     ParsingString::ParsingChars => {
-                                        self.string_parser.add_byte(byte);
-
-                                        if self.string_parser.has_finished_capturing_bytes() {
-                                            // We have finishing capturing the string bytes
-
-                                            self.json.push_str(&self.string_parser.json());
-
-                                            // We have finished parsing the string
-                                            self.stack.pop();
-                                            self.check_first_list_item();
-                                            self.check_end_dictionary_key();
-                                        }
+                                        self.process_string_value_byte(byte);
                                     }
                                 },
                             }
@@ -248,18 +237,7 @@ impl<R: Read> BencodeParser<R> {
                                     self.string_parser.add_length_byte(byte);
                                 }
                                 ParsingString::ParsingChars => {
-                                    self.string_parser.add_byte(byte);
-
-                                    if self.string_parser.has_finished_capturing_bytes() {
-                                        // We have finishing capturing the string bytes
-
-                                        self.json.push_str(&self.string_parser.json());
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
-                                        self.check_end_dictionary_key();
-                                    }
+                                    self.process_string_value_byte(byte);
                                 }
                             },
                             State::ParsingList(parsing_list) => {
@@ -358,18 +336,7 @@ impl<R: Read> BencodeParser<R> {
                                         .push(State::ParsingString(ParsingString::ParsingChars));
                                 }
                                 ParsingString::ParsingChars => {
-                                    self.string_parser.add_byte(byte);
-
-                                    if self.string_parser.has_finished_capturing_bytes() {
-                                        // We have finishing capturing the string bytes
-
-                                        self.json.push_str(&self.string_parser.json());
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
-                                        self.check_end_dictionary_key();
-                                    }
+                                    self.process_string_value_byte(byte);
                                 }
                             }
                         }
@@ -379,50 +346,35 @@ impl<R: Read> BencodeParser<R> {
                         panic!("unexpected byte: ':', not parsing a string");
                     }
                 },
-                b'l' => {
-                    match self.stack.last() {
-                        Some(state) => match state {
-                            State::ParsingList(parsing_list) => match parsing_list {
-                                ParsingList::Start => {
-                                    self.stack.push(State::ParsingList(ParsingList::Start));
-                                    self.json.push('[');
-                                }
-                                ParsingList::Rest => {}
-                            },
-                            State::ParsingDictionary(parsing_dictionary) => {
-                                match parsing_dictionary {
-                                    ParsingDictionary::Start => todo!(),
-                                    ParsingDictionary::FirstKeyValuePair(_) => todo!(),
-                                    ParsingDictionary::NextKeyValuePair(_) => todo!(),
-                                }
+                b'l' => match self.stack.last() {
+                    Some(state) => match state {
+                        State::ParsingList(parsing_list) => match parsing_list {
+                            ParsingList::Start => {
+                                self.stack.push(State::ParsingList(ParsingList::Start));
+                                self.json.push('[');
                             }
-                            State::ParsingInteger => {}
-                            State::ParsingString(parsing_string) => match parsing_string {
-                                ParsingString::ParsingLength => {
-                                    panic!("unexpected byte: 'l', parsing string length")
-                                }
-                                ParsingString::ParsingChars => {
-                                    self.string_parser.add_byte(byte);
-
-                                    if self.string_parser.has_finished_capturing_bytes() {
-                                        // We have finishing capturing the string bytes
-
-                                        self.json.push_str(&self.string_parser.json());
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
-                                        self.check_end_dictionary_key();
-                                    }
-                                }
-                            },
+                            ParsingList::Rest => {}
                         },
-                        None => {
-                            self.stack.push(State::ParsingList(ParsingList::Start));
-                            self.json.push('[');
-                        }
+                        State::ParsingDictionary(parsing_dictionary) => match parsing_dictionary {
+                            ParsingDictionary::Start => todo!(),
+                            ParsingDictionary::FirstKeyValuePair(_) => todo!(),
+                            ParsingDictionary::NextKeyValuePair(_) => todo!(),
+                        },
+                        State::ParsingInteger => {}
+                        State::ParsingString(parsing_string) => match parsing_string {
+                            ParsingString::ParsingLength => {
+                                panic!("unexpected byte: 'l', parsing string length")
+                            }
+                            ParsingString::ParsingChars => {
+                                self.process_string_value_byte(byte);
+                            }
+                        },
+                    },
+                    None => {
+                        self.stack.push(State::ParsingList(ParsingList::Start));
+                        self.json.push('[');
                     }
-                }
+                },
                 b'd' => match self.stack.last() {
                     Some(_) => todo!(),
                     None => {
@@ -475,18 +427,7 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'e', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    self.string_parser.add_byte(byte);
-
-                                    if self.string_parser.has_finished_capturing_bytes() {
-                                        // We have finishing parsing the string
-
-                                        self.json.push_str(&self.string_parser.json());
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
-                                        self.check_end_dictionary_key();
-                                    }
+                                    self.process_string_value_byte(byte);
                                 }
                             },
                         },
@@ -495,33 +436,20 @@ impl<R: Read> BencodeParser<R> {
 
                     self.check_first_list_item();
                 }
-                _ => {
-                    match self.stack.last() {
-                        Some(state) => match state {
-                            State::ParsingList(_) => {}
-                            State::ParsingDictionary(_) => {}
-                            State::ParsingInteger => {}
-                            State::ParsingString(parsing_string) => match parsing_string {
-                                ParsingString::ParsingLength => {}
-                                ParsingString::ParsingChars => {
-                                    self.string_parser.add_byte(byte);
-
-                                    if self.string_parser.has_finished_capturing_bytes() {
-                                        // We have finishing capturing the string bytes
-
-                                        self.json.push_str(&self.string_parser.json());
-
-                                        // We have finished parsing the string
-                                        self.stack.pop();
-                                        self.check_first_list_item();
-                                        self.check_end_dictionary_key();
-                                    }
-                                }
-                            },
+                _ => match self.stack.last() {
+                    Some(state) => match state {
+                        State::ParsingList(_) => {}
+                        State::ParsingDictionary(_) => {}
+                        State::ParsingInteger => {}
+                        State::ParsingString(parsing_string) => match parsing_string {
+                            ParsingString::ParsingLength => {}
+                            ParsingString::ParsingChars => {
+                                self.process_string_value_byte(byte);
+                            }
                         },
-                        None => {}
-                    }
-                }
+                    },
+                    None => {}
+                },
             }
 
             self.iter += 1;
@@ -532,11 +460,19 @@ impl<R: Read> BencodeParser<R> {
         Ok(())
     }
 
-    fn read_byte(&mut self) -> io::Result<u8> {
-        let mut byte = [0; 1];
-        self.reader.read_exact(&mut byte)?;
-        self.pos += 1;
-        Ok(byte[0])
+    fn process_string_value_byte(&mut self, byte: u8) {
+        self.string_parser.add_byte(byte);
+
+        if self.string_parser.has_finished_capturing_bytes() {
+            // We have finishing capturing the string bytes
+
+            self.json.push_str(&self.string_parser.json());
+
+            // We have finished parsing the string
+            self.stack.pop();
+            self.check_first_list_item();
+            self.check_end_dictionary_key();
+        }
     }
 
     #[allow(clippy::single_match)]
@@ -587,6 +523,13 @@ impl<R: Read> BencodeParser<R> {
             },
             None => {}
         }
+    }
+
+    fn read_byte(&mut self) -> io::Result<u8> {
+        let mut byte = [0; 1];
+        self.reader.read_exact(&mut byte)?;
+        self.pos += 1;
+        Ok(byte[0])
     }
 }
 
