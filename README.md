@@ -65,6 +65,7 @@ echo "4:spam" | ./be2json
 - Use Property-Based Testing. Generate random valid bencoded values.
 - Refactor: Use only one tests with a data provider containing all cases.
 - Install tracing crate. Add verbose mode that enables debugging.
+- Option to  store the JSON and check if it's valid at the end of the process.
 
 ## Alternatives
 

@@ -61,7 +61,7 @@ struct StringParser {
 }
 
 impl StringParser {
-    fn reset(&mut self) {
+    fn new_string(&mut self) {
         // todo: this should be removed when we use an optional.
         // Instead of reset we delete the old one and create a new one.
         self.bytes_for_string_length = Vec::new();
@@ -245,7 +245,7 @@ impl<R: Read> BencodeParser<R> {
                                     ParsingList::Start => {
                                         // First item in the list and it is a string
 
-                                        self.string_parser.reset();
+                                        self.string_parser.new_string();
 
                                         self.string_parser.add_length_byte(byte);
 
@@ -256,7 +256,7 @@ impl<R: Read> BencodeParser<R> {
                                     ParsingList::Rest => {
                                         // Non first item in the list and it is a string
 
-                                        self.string_parser.reset();
+                                        self.string_parser.new_string();
 
                                         self.string_parser.add_length_byte(byte);
 
@@ -279,7 +279,7 @@ impl<R: Read> BencodeParser<R> {
                                             ),
                                         ));
 
-                                        self.string_parser.reset();
+                                        self.string_parser.new_string();
 
                                         self.string_parser.add_length_byte(byte);
 
@@ -297,7 +297,7 @@ impl<R: Read> BencodeParser<R> {
                                             ParsingKeyValuePair::Value => {
                                                 // First key value in the dictionary and it's an string
 
-                                                self.string_parser.reset();
+                                                self.string_parser.new_string();
 
                                                 self.string_parser.add_length_byte(byte);
 
@@ -316,7 +316,7 @@ impl<R: Read> BencodeParser<R> {
                             self.stack
                                 .push(State::ParsingString(ParsingString::ParsingLength));
 
-                            self.string_parser.reset();
+                            self.string_parser.new_string();
 
                             self.string_parser.add_length_byte(byte);
                         }
