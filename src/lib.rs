@@ -117,6 +117,10 @@ impl CurrentStringBeingParsed {
         }
     }
 
+    fn json(&self) -> String {
+        format!("\"{}\"", self.utf8())
+    }
+
     fn bytes_to_hex(data: &[u8]) -> String {
         format!("<hex>{}</hex>", hex::encode(data))
     }
@@ -219,9 +223,7 @@ impl<R: Read> BencodeParser<R> {
                                         {
                                             // We have finishing capturing the string bytes
 
-                                            let string = current_string_being_parsed.utf8();
-
-                                            self.json.push_str(&format!("\"{string}\""));
+                                            self.json.push_str(&current_string_being_parsed.json());
 
                                             // We have finished parsing the string
                                             self.stack.pop();
@@ -254,9 +256,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = current_string_being_parsed.utf8();
-
-                                        self.json.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&current_string_being_parsed.json());
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -366,9 +366,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = current_string_being_parsed.utf8();
-
-                                        self.json.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&current_string_being_parsed.json());
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -412,9 +410,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = current_string_being_parsed.utf8();
-
-                                        self.json.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&current_string_being_parsed.json());
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -487,9 +483,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing parsing the string
 
-                                        let string = current_string_being_parsed.utf8();
-
-                                        self.json.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&current_string_being_parsed.json());
 
                                         // We have finished parsing the string
                                         self.stack.pop();
@@ -518,9 +512,7 @@ impl<R: Read> BencodeParser<R> {
                                     if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
-                                        let string = current_string_being_parsed.utf8();
-
-                                        self.json.push_str(&format!("\"{string}\""));
+                                        self.json.push_str(&current_string_being_parsed.json());
 
                                         // We have finished parsing the string
                                         self.stack.pop();
