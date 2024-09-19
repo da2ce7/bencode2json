@@ -43,13 +43,18 @@ pub struct BencodeParser<R: Read> {
     stack: Vec<State>,
 }
 
+// todo: we don't have an integer parser because we simple print all bytes between
+// the start (`i`) and end (`e`) delimiters for integer values. However, what
+// should happen when the integer contains a byte that is not a digit. For
+// example: b"i12G345e"?
+
 #[derive(Default, Debug)]
 struct CurrentStringBeingParsed {
     // String length
-    pub bytes_for_string_length: Vec<u8>,
-    pub string_length: usize,
+    bytes_for_string_length: Vec<u8>,
+    string_length: usize,
 
-    // String bytes
+    // String value bytes
     string_bytes: Vec<u8>,
     string_bytes_counter: usize,
 }
@@ -73,12 +78,29 @@ impl CurrentStringBeingParsed {
     fn add_byte(&mut self, byte: u8) {
         // todo: return an error if we try to push a new byte but the end of the
         // string has been reached.
-
         self.string_bytes.push(byte);
         self.string_bytes_counter += 1;
     }
 
-    fn has_finishing_capturing_bytes(&self) -> bool {
+    /// This function is called when we receive the ':' byte which is the
+    /// delimiter for the end of bytes representing the string length.
+    fn process_end_of_string_length(&mut self) {
+        // todo: maybe we should simply fail when we receive a byte that is not a digit (0..9).
+        // This error cannot be understood by users because we first convert into a UTF-8 string
+        // and later into a number.
+        let length_str = str::from_utf8(&self.bytes_for_string_length)
+            .expect("invalid string length, non UTF-8 string length");
+
+        //println!("length_str: {length_str}");
+
+        self.string_length = length_str
+            .parse::<usize>()
+            .expect("invalid string length, non zero or positive integer");
+
+        //println!("string_length_number: {string_length}");
+    }
+
+    fn has_finished_capturing_bytes(&self) -> bool {
         self.string_bytes_counter == self.string_length
     }
 
@@ -193,7 +215,7 @@ impl<R: Read> BencodeParser<R> {
                                         current_string_being_parsed.add_byte(byte);
 
                                         if current_string_being_parsed
-                                            .has_finishing_capturing_bytes()
+                                            .has_finished_capturing_bytes()
                                         {
                                             // We have finishing capturing the string bytes
 
@@ -229,7 +251,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
 
-                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
+                                    if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = current_string_being_parsed.utf8();
@@ -331,19 +353,7 @@ impl<R: Read> BencodeParser<R> {
                             match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // We reach the end of the string length
-
-                                    let length_str = str::from_utf8(
-                                        &current_string_being_parsed.bytes_for_string_length,
-                                    )
-                                    .expect("non UTF8 string length");
-                                    //println!("length_str: {length_str}");
-
-                                    current_string_being_parsed.string_length = length_str
-                                        .parse::<usize>()
-                                        .expect("invalid number for string length");
-                                    //println!("string_length_number: {string_length}");
-
-                                    // todo: is string with size 0 (empty string) allowed in bencode?
+                                    current_string_being_parsed.process_end_of_string_length();
 
                                     // We have finished parsing the string length
                                     self.stack.pop();
@@ -353,7 +363,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
 
-                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
+                                    if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = current_string_being_parsed.utf8();
@@ -399,7 +409,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
 
-                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
+                                    if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = current_string_being_parsed.utf8();
@@ -474,7 +484,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
 
-                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
+                                    if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing parsing the string
 
                                         let string = current_string_being_parsed.utf8();
@@ -505,7 +515,7 @@ impl<R: Read> BencodeParser<R> {
                                 ParsingString::ParsingChars => {
                                     current_string_being_parsed.add_byte(byte);
 
-                                    if current_string_being_parsed.has_finishing_capturing_bytes() {
+                                    if current_string_being_parsed.has_finished_capturing_bytes() {
                                         // We have finishing capturing the string bytes
 
                                         let string = current_string_being_parsed.utf8();
@@ -605,6 +615,8 @@ mod tests {
 
     mod strings {
         use crate::BencodeParser;
+
+        // todo: string with size 0 (empty string) are allowed: b"0:"
 
         #[test]
         fn utf8() {
