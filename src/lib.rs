@@ -50,12 +50,21 @@ struct CurrentStringBeingParsed {
     pub string_length: usize,
 
     // String bytes
-    pub string_bytes: Vec<u8>,
-    pub string_bytes_counter: usize,
+    string_bytes: Vec<u8>,
+    string_bytes_counter: usize,
 }
 
 impl CurrentStringBeingParsed {
-    fn push(&mut self, byte: u8) {
+    fn reset(&mut self) {
+        // todo: this should be removed when we use an optional.
+        // Instead of reset we delete the old one and create a new one.
+        self.bytes_for_string_length = Vec::new();
+        self.string_length = 0;
+        self.string_bytes = Vec::new();
+        self.string_bytes_counter = 0;
+    }
+
+    fn add_byte(&mut self, byte: u8) {
         // todo: return an error if we try to push a new byte but the end of the
         // string has been reached.
 
@@ -175,7 +184,7 @@ impl<R: Read> BencodeParser<R> {
                                         panic!("unexpected byte 'i', parsing string length ")
                                     }
                                     ParsingString::ParsingChars => {
-                                        current_string_being_parsed.push(byte);
+                                        current_string_being_parsed.add_byte(byte);
 
                                         if current_string_being_parsed
                                             .has_finishing_capturing_bytes()
@@ -214,7 +223,7 @@ impl<R: Read> BencodeParser<R> {
                                         .push(byte);
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.push(byte);
+                                    current_string_being_parsed.add_byte(byte);
 
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
@@ -235,12 +244,7 @@ impl<R: Read> BencodeParser<R> {
                                     ParsingList::Start => {
                                         // First item in the list and it is a string
 
-                                        // New string -> reset current string being parsed
-                                        current_string_being_parsed.bytes_for_string_length =
-                                            Vec::new();
-                                        current_string_being_parsed.string_length = 0;
-                                        current_string_being_parsed.string_bytes = Vec::new();
-                                        current_string_being_parsed.string_bytes_counter = 0;
+                                        current_string_being_parsed.reset();
 
                                         current_string_being_parsed
                                             .bytes_for_string_length
@@ -253,12 +257,7 @@ impl<R: Read> BencodeParser<R> {
                                     ParsingList::Rest => {
                                         // Non first item in the list and it is a string
 
-                                        // New string -> reset current string being parsed
-                                        current_string_being_parsed.bytes_for_string_length =
-                                            Vec::new();
-                                        current_string_being_parsed.string_length = 0;
-                                        current_string_being_parsed.string_bytes = Vec::new();
-                                        current_string_being_parsed.string_bytes_counter = 0;
+                                        current_string_being_parsed.reset();
 
                                         current_string_being_parsed
                                             .bytes_for_string_length
@@ -283,12 +282,7 @@ impl<R: Read> BencodeParser<R> {
                                             ),
                                         ));
 
-                                        // New string -> reset current string being parsed
-                                        current_string_being_parsed.bytes_for_string_length =
-                                            Vec::new();
-                                        current_string_being_parsed.string_length = 0;
-                                        current_string_being_parsed.string_bytes = Vec::new();
-                                        current_string_being_parsed.string_bytes_counter = 0;
+                                        current_string_being_parsed.reset();
 
                                         current_string_being_parsed
                                             .bytes_for_string_length
@@ -308,14 +302,7 @@ impl<R: Read> BencodeParser<R> {
                                             ParsingKeyValuePair::Value => {
                                                 // First key value in the dictionary and it's an string
 
-                                                // New string -> reset current string being parsed
-                                                current_string_being_parsed
-                                                    .bytes_for_string_length = Vec::new();
-                                                current_string_being_parsed.string_length = 0;
-                                                current_string_being_parsed.string_bytes =
-                                                    Vec::new();
-                                                current_string_being_parsed.string_bytes_counter =
-                                                    0;
+                                                current_string_being_parsed.reset();
 
                                                 current_string_being_parsed
                                                     .bytes_for_string_length
@@ -336,11 +323,7 @@ impl<R: Read> BencodeParser<R> {
                             self.stack
                                 .push(State::ParsingString(ParsingString::ParsingLength));
 
-                            // New string -> reset current string being parsed
-                            current_string_being_parsed.bytes_for_string_length = Vec::new();
-                            current_string_being_parsed.string_length = 0;
-                            current_string_being_parsed.string_bytes = Vec::new();
-                            current_string_being_parsed.string_bytes_counter = 0;
+                            current_string_being_parsed.reset();
 
                             current_string_being_parsed
                                 .bytes_for_string_length
@@ -354,6 +337,7 @@ impl<R: Read> BencodeParser<R> {
                             match parsing_string {
                                 ParsingString::ParsingLength => {
                                     // We reach the end of the string length
+
                                     let length_str = str::from_utf8(
                                         &current_string_being_parsed.bytes_for_string_length,
                                     )
@@ -373,7 +357,7 @@ impl<R: Read> BencodeParser<R> {
                                         .push(State::ParsingString(ParsingString::ParsingChars));
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.push(byte);
+                                    current_string_being_parsed.add_byte(byte);
 
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
@@ -419,7 +403,7 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'l', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.push(byte);
+                                    current_string_being_parsed.add_byte(byte);
 
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes
@@ -494,7 +478,7 @@ impl<R: Read> BencodeParser<R> {
                                     panic!("unexpected byte: 'e', parsing string length")
                                 }
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.push(byte);
+                                    current_string_being_parsed.add_byte(byte);
 
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing parsing the string
@@ -525,7 +509,7 @@ impl<R: Read> BencodeParser<R> {
                             State::ParsingString(parsing_string) => match parsing_string {
                                 ParsingString::ParsingLength => {}
                                 ParsingString::ParsingChars => {
-                                    current_string_being_parsed.push(byte);
+                                    current_string_being_parsed.add_byte(byte);
 
                                     if current_string_being_parsed.has_finishing_capturing_bytes() {
                                         // We have finishing capturing the string bytes

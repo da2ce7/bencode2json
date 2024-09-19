@@ -79,6 +79,13 @@ Bencode online:
 - <https://adrianstoll.com/post/bencoding/>
 - <https://chocobo1.github.io/bencode_online/>
 
+## Links
+
+Bencode:
+
+- <https://wiki.theory.org/BitTorrentSpecification#Bencoding>
+- <https://en.wikipedia.org/wiki/Bencode>
+
 ## Credits
 
 This implementation is basically a port to Rust from <https://gist.github.com/camilleoudot/840929699392b3d25afbec25d850c94a> with some changes like:
