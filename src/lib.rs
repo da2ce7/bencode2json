@@ -167,13 +167,13 @@ impl<R: Read> BencodeParser<R> {
                 Err(err) => return Err(err),
             };
 
-            /*println!("iter: {}", self.iter);
+            println!("iter: {}", self.iter);
             println!("pos: {}", self.pos);
             println!("byte: {} ({})", byte, byte as char);
             println!("stack: {:#?}", self.stack);
-            println!("current_string_being_parsed: {current_string_being_parsed:#?}");
+            println!("string_parser: {:#?}", self.string_parser);
             println!("output: {}", self.json);
-            println!();*/
+            println!();
 
             match byte {
                 b'i' => {
@@ -888,8 +888,12 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
-            #[ignore]
             fn two_integers() {
+                // List with a non UTF-8 string and an integer: d3:bari42e3:fooi43ee
+                //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20 (pos)
+                //   d   3   :   b   a   r   i   4   2   e   3   :   f   o   o   i   4   3   e   e (byte)
+                // 100  51  58  98  97 114 105  52  50 101  51  58 102 111 111 105  52  51 101 101 (byte decimal)
+
                 let data = b"d3:bari42e3:fooi43ee";
 
                 let mut parser = BencodeParser::new(&data[..]);
