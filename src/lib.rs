@@ -1,6 +1,49 @@
 use std::io::{self, Read};
 use std::str;
 
+pub struct Stack {
+    items: Vec<StackItem>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum StackItem {
+    I, // INTEGER
+    L, // LIST
+    M, // NESTED_LIST
+    D, // DICTIONARY
+    F, // NESTED_DICTIONARY?
+    E, // END OF INTEGER, LIST OR DICTIONARY
+}
+
+impl Default for Stack {
+    fn default() -> Self {
+        let items = vec![StackItem::I];
+        Self { items }
+    }
+}
+
+impl Stack {
+    fn push(&mut self, item: StackItem) {
+        self.items.push(item);
+    }
+
+    fn pop(&mut self) {
+        self.items.pop();
+    }
+
+    fn swap_top(&mut self, new_item: StackItem) {
+        self.items.pop();
+        self.push(new_item);
+    }
+
+    fn top(&self) -> StackItem {
+        match self.items.last() {
+            Some(top) => top.clone(),
+            None => panic!("empty stack!"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Parsing {
     Integer, // todo: add ParsingInteger
@@ -33,7 +76,7 @@ pub struct BencodeParser<R: Read> {
     pub pos: u64,
     reader: R,
     stack: Vec<Parsing>,
-    string_parser: StringParser,
+    new_stack: Stack,
     captured_input: Option<Vec<u8>>,
 }
 
@@ -97,10 +140,6 @@ impl StringParser {
         //println!("string_length_number: {string_length}");
     }
 
-    fn has_finished_capturing_bytes(&self) -> bool {
-        self.string_bytes_counter == self.string_length
-    }
-
     fn utf8(&self) -> String {
         match str::from_utf8(&self.string_bytes) {
             Ok(string) => {
@@ -129,12 +168,115 @@ impl<R: Read> BencodeParser<R> {
             debug: false,
             reader,
             stack: Vec::new(),
+            new_stack: Stack::default(),
             json: String::new(),
             pos: 0,
             iter: 1,
-            string_parser: StringParser::default(),
             captured_input: Some(Vec::new()),
         }
+    }
+
+    pub fn struct_hlp(&mut self) {
+        match self.new_stack.top() {
+            StackItem::D => {
+                self.new_stack.swap_top(StackItem::E);
+            }
+            StackItem::E => {
+                self.json.push(':');
+                self.new_stack.swap_top(StackItem::F);
+            }
+            StackItem::F => {
+                self.json.push(',');
+                self.new_stack.swap_top(StackItem::E);
+            }
+            StackItem::L => {
+                self.new_stack.swap_top(StackItem::M);
+            }
+            StackItem::M => self.json.push(','),
+            StackItem::I => {}
+        }
+    }
+
+    fn dump_int(&mut self) -> io::Result<()> {
+        let mut st = 0;
+
+        loop {
+            let byte = match self.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    break;
+                }
+                Err(err) => return Err(err),
+            };
+
+            let char = byte as char;
+
+            if char.is_ascii_digit() {
+                st = 2;
+                self.json.push(char);
+            } else if char == 'e' && st == 2 {
+                return Ok(());
+            } else if char == '-' && st == 0 {
+                st = 1;
+                self.json.push(char);
+            } else {
+                panic!("invalid integer");
+            }
+        }
+
+        Ok(())
+    }
+
+    fn dump_str(&mut self, byte: u8) -> io::Result<()> {
+        let mut string_parser = StringParser::default();
+
+        string_parser.new_string_starting_with(byte);
+
+        // Parse length
+
+        loop {
+            let byte = match self.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    break;
+                }
+                Err(err) => return Err(err),
+            };
+
+            match byte {
+                b':' => {
+                    // End of string length
+                    string_parser.process_end_of_string_length();
+                    break;
+                }
+                _ => {
+                    string_parser.add_length_byte(byte);
+                }
+            }
+        }
+
+        // Parse value
+
+        for _i in 1..string_parser.string_length {
+            let byte = match self.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    break;
+                }
+                Err(err) => return Err(err),
+            };
+
+            string_parser.add_byte(byte);
+
+            // todo: escape '"' and '\\' with '\\';
+        }
+
+        self.json.push_str(&string_parser.json());
+
+        Ok(())
     }
 
     /// todo
@@ -169,165 +311,42 @@ impl<R: Read> BencodeParser<R> {
             }
 
             match byte {
-                b'i' => match self.stack.last() {
-                    Some(state) => match state {
-                        Parsing::List(parsing_list) => match parsing_list {
-                            ParsingList::FirstItem => {
-                                self.stack.push(Parsing::Integer);
-                            }
-                            ParsingList::NextItem => {
-                                self.stack.push(Parsing::Integer);
-                                self.json.push(',');
-                            }
-                        },
-                        Parsing::Integer => {
-                            panic!("invalid byte, parsing integer expected digit")
-                        }
-                        Parsing::String(parsing_string) => match parsing_string {
-                            ParsingString::Length => {
-                                panic!("unexpected byte 'i', parsing string length ")
-                            }
-                            ParsingString::Chars => {
-                                self.process_string_value_byte(byte);
-                            }
-                        },
-                    },
-                    None => {
-                        self.stack.push(Parsing::Integer);
-                    }
-                },
+                b'd' => {
+                    self.struct_hlp();
+                    self.json.push('{');
+                    self.new_stack.push(StackItem::D);
+                }
+                b'l' => {
+                    self.struct_hlp();
+                    self.json.push('[');
+                    self.new_stack.push(StackItem::L);
+                }
+                b'i' => {
+                    self.struct_hlp();
+                    self.dump_int().expect("invalid integer");
+                }
                 b'0'..=b'9' => {
-                    match self.stack.last() {
-                        Some(state) => match state {
-                            Parsing::Integer => {
-                                self.json.push(byte as char);
-                            }
-                            Parsing::String(parsing_string) => match parsing_string {
-                                ParsingString::Length => {
-                                    // Add a digit for the string length
-                                    self.process_string_length_byte(byte);
-                                }
-                                ParsingString::Chars => {
-                                    // Add a byte for the string value
-                                    self.process_string_value_byte(byte);
-                                }
-                            },
-                            Parsing::List(parsing_list) => {
-                                match parsing_list {
-                                    ParsingList::FirstItem => {
-                                        // First item in the list and it is a string
-
-                                        self.string_parser.new_string_starting_with(byte);
-
-                                        self.stack.push(Parsing::String(ParsingString::Length));
-                                    }
-                                    ParsingList::NextItem => {
-                                        // Non first item in the list and it is a string
-
-                                        self.string_parser.new_string_starting_with(byte);
-
-                                        self.stack.push(Parsing::String(ParsingString::Length));
-
-                                        self.json.push(',');
-                                    }
-                                }
-                            }
-                        },
-                        None => {
-                            // First byte in input and it is a string
-                            self.stack.push(Parsing::String(ParsingString::Length));
-
-                            self.string_parser.new_string_starting_with(byte);
-                        }
-                    };
+                    self.struct_hlp();
+                    self.dump_str(byte).expect("invalid string");
                 }
-                b':' => match self.stack.last() {
-                    Some(state) => match state {
-                        Parsing::String(parsing_string) => {
-                            match parsing_string {
-                                ParsingString::Length => {
-                                    // We reach the end of the string length
-                                    self.string_parser.process_end_of_string_length();
-
-                                    // We have finished parsing the string length
-                                    self.stack.pop();
-                                    self.stack.push(Parsing::String(ParsingString::Chars));
-                                }
-                                ParsingString::Chars => {
-                                    self.process_string_value_byte(byte);
-                                }
-                            }
-                        }
-                        _ => panic!("unexpected byte: ':', not parsing a string"),
-                    },
-                    None => {
-                        panic!("unexpected byte: ':', not parsing a string");
-                    }
-                },
-                b'l' => match self.stack.last() {
-                    Some(state) => match state {
-                        Parsing::List(parsing_list) => match parsing_list {
-                            ParsingList::FirstItem => {
-                                self.stack.push(Parsing::List(ParsingList::FirstItem));
-                                self.json.push('[');
-                            }
-                            ParsingList::NextItem => {}
-                        },
-                        Parsing::Integer => {}
-                        Parsing::String(parsing_string) => match parsing_string {
-                            ParsingString::Length => {
-                                panic!("unexpected byte: 'l', parsing string length")
-                            }
-                            ParsingString::Chars => {
-                                self.process_string_value_byte(byte);
-                            }
-                        },
-                    },
-                    None => {
-                        self.stack.push(Parsing::List(ParsingList::FirstItem));
-                        self.json.push('[');
-                    }
-                },
-                b'd' => todo!(),
                 b'e' => {
-                    match self.stack.last() {
-                        Some(state) => match state {
-                            Parsing::List(_) => {
-                                // We have finished parsing the list
-                                self.stack.pop();
-                                self.json.push(']');
-                            }
-                            Parsing::Integer => {
-                                // We have finished parsing the integer
-                                self.stack.pop();
-                            }
-                            Parsing::String(parsing_string) => match parsing_string {
-                                ParsingString::Length => {
-                                    panic!("unexpected byte: 'e', parsing string length")
-                                }
-                                ParsingString::Chars => {
-                                    self.process_string_value_byte(byte);
-                                }
-                            },
-                        },
-                        None => panic!("invalid byte, unexpected end byte `e`"),
+                    match self.new_stack.top() {
+                        StackItem::L | StackItem::M => {
+                            self.json.push(']');
+                            self.new_stack.pop();
+                        }
+                        StackItem::D | StackItem::F => {
+                            self.json.push('}');
+                        }
+                        StackItem::E | StackItem::I => {
+                            panic!("error parsing end, unexpected item I on the stack")
+                        }
                     }
-
-                    self.check_end_first_list_item();
+                    // todo: sp < stack
                 }
-                _ => match self.stack.last() {
-                    Some(state) => match state {
-                        Parsing::List(_) => {}
-                        Parsing::Integer => {}
-                        Parsing::String(parsing_string) => match parsing_string {
-                            ParsingString::Length => {}
-                            ParsingString::Chars => {
-                                self.process_string_value_byte(byte);
-                            }
-                        },
-                    },
-                    None => {}
-                },
+                _ => {
+                    panic!("{}", format!("unexpected byte {} ({})", byte, byte as char));
+                }
             }
 
             if self.debug {
@@ -350,42 +369,6 @@ impl<R: Read> BencodeParser<R> {
         // todo: if we exit the loop with a non empty stack, that's an error (incomplete bencode value).
 
         Ok(())
-    }
-
-    fn process_string_length_byte(&mut self, byte: u8) {
-        self.string_parser.add_length_byte(byte);
-    }
-
-    fn process_string_value_byte(&mut self, byte: u8) {
-        self.string_parser.add_byte(byte);
-
-        if self.string_parser.has_finished_capturing_bytes() {
-            // We have finishing capturing the string bytes
-
-            self.json.push_str(&self.string_parser.json());
-
-            // We have finished parsing the string
-            self.stack.pop();
-            self.check_end_first_list_item();
-        }
-    }
-
-    #[allow(clippy::single_match)]
-    fn check_end_first_list_item(&mut self) {
-        match self.stack.last() {
-            Some(state) => match state {
-                Parsing::List(parsing_list) => match parsing_list {
-                    ParsingList::FirstItem => {
-                        self.stack.pop();
-                        self.stack.push(Parsing::List(ParsingList::NextItem));
-                    }
-                    ParsingList::NextItem => {}
-                },
-                Parsing::Integer => {}
-                Parsing::String(_parsing_string) => {}
-            },
-            None => {}
-        }
     }
 
     fn read_byte(&mut self) -> io::Result<u8> {
