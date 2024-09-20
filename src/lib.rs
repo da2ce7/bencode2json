@@ -259,7 +259,7 @@ impl<R: Read> BencodeParser<R> {
 
         // Parse value
 
-        for _i in 1..string_parser.string_length {
+        for _i in 1..=string_parser.string_length {
             let byte = match self.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
@@ -275,6 +275,8 @@ impl<R: Read> BencodeParser<R> {
         }
 
         self.json.push_str(&string_parser.json());
+
+        //println!("string_parser {string_parser:#?}");
 
         Ok(())
     }
@@ -418,6 +420,10 @@ mod tests {
         #[test]
         fn utf8() {
             let data = b"4:spam";
+
+            //  1   2   3   4   5   6 (pos)
+            //  4   :   s   p   a   m (byte)
+            // 52  58 115 112  97 109 (byte decimal)
 
             let mut parser = BencodeParser::new(&data[..]);
             parser.parse().unwrap();
@@ -762,7 +768,6 @@ mod tests {
         */
 
         #[test]
-        #[ignore]
         fn empty_dictionary() {
             let data = b"de";
 
@@ -776,7 +781,6 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
-            #[ignore]
             fn integer() {
                 let data = b"d3:fooi42ee";
 
@@ -787,7 +791,6 @@ mod tests {
             }
 
             #[test]
-            #[ignore]
             fn utf8_string() {
                 let data = b"d3:bar4:spame";
 
@@ -798,7 +801,6 @@ mod tests {
             }
 
             #[test]
-            #[ignore]
             fn non_utf8_string() {
                 let data = b"d3:bar2:\xFF\xFEe";
 
@@ -813,7 +815,6 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
-            #[ignore]
             fn two_integers() {
                 // Dictionary with two integers: d3:bari42e3:fooi43ee
                 //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20 (pos)
@@ -829,7 +830,6 @@ mod tests {
             }
 
             #[test]
-            #[ignore]
             fn two_utf8_strings() {
                 // Dictionary with two UTF-8 strings: d3:bar4:spam3:foo5:alicee
                 //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25 (pos)
@@ -843,7 +843,7 @@ mod tests {
 
                 assert_eq!(
                     parser.json,
-                    "{\"bar\":\"spam,\"foo\":\"alice\"}".to_string()
+                    "{\"bar\":\"spam\",\"foo\":\"alice\"}".to_string()
                 );
             }
         }
