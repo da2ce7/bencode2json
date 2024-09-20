@@ -205,7 +205,7 @@ impl<R: Read> BencodeParser<R> {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
-                    break;
+                    panic!("unexpected end of input parsing integer");
                 }
                 Err(err) => return Err(err),
             };
@@ -224,8 +224,6 @@ impl<R: Read> BencodeParser<R> {
                 panic!("invalid integer");
             }
         }
-
-        Ok(())
     }
 
     fn dump_str(&mut self, byte: u8) -> io::Result<()> {
@@ -240,7 +238,7 @@ impl<R: Read> BencodeParser<R> {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
-                    break;
+                    panic!("unexpected end of input parsing string length");
                 }
                 Err(err) => return Err(err),
             };
@@ -264,7 +262,7 @@ impl<R: Read> BencodeParser<R> {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
-                    break;
+                    panic!("unexpected end of input parsing string chars");
                 }
                 Err(err) => return Err(err),
             };
