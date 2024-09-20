@@ -1,6 +1,7 @@
 use std::io::{self, Read};
 use std::str;
 
+#[derive(Debug)]
 pub struct Stack {
     items: Vec<StackItem>,
 }
@@ -44,39 +45,13 @@ impl Stack {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Parsing {
-    Integer, // todo: add ParsingInteger
-    String(ParsingString),
-    List(ParsingList),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParsingInteger {
-    Length,
-    Chars,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParsingString {
-    Length,
-    Chars,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParsingList {
-    FirstItem,
-    NextItem,
-}
-
 pub struct BencodeParser<R: Read> {
     pub debug: bool,
     pub json: String,
     pub iter: u64,
     pub pos: u64,
     reader: R,
-    stack: Vec<Parsing>,
-    new_stack: Stack,
+    stack: Stack,
     captured_input: Option<Vec<u8>>,
 }
 
@@ -167,8 +142,7 @@ impl<R: Read> BencodeParser<R> {
         BencodeParser {
             debug: false,
             reader,
-            stack: Vec::new(),
-            new_stack: Stack::default(),
+            stack: Stack::default(),
             json: String::new(),
             pos: 0,
             iter: 1,
@@ -177,20 +151,20 @@ impl<R: Read> BencodeParser<R> {
     }
 
     pub fn struct_hlp(&mut self) {
-        match self.new_stack.top() {
+        match self.stack.top() {
             StackItem::D => {
-                self.new_stack.swap_top(StackItem::E);
+                self.stack.swap_top(StackItem::E);
             }
             StackItem::E => {
                 self.json.push(':');
-                self.new_stack.swap_top(StackItem::F);
+                self.stack.swap_top(StackItem::F);
             }
             StackItem::F => {
                 self.json.push(',');
-                self.new_stack.swap_top(StackItem::E);
+                self.stack.swap_top(StackItem::E);
             }
             StackItem::L => {
-                self.new_stack.swap_top(StackItem::M);
+                self.stack.swap_top(StackItem::M);
             }
             StackItem::M => self.json.push(','),
             StackItem::I => {}
@@ -314,12 +288,12 @@ impl<R: Read> BencodeParser<R> {
                 b'd' => {
                     self.struct_hlp();
                     self.json.push('{');
-                    self.new_stack.push(StackItem::D);
+                    self.stack.push(StackItem::D);
                 }
                 b'l' => {
                     self.struct_hlp();
                     self.json.push('[');
-                    self.new_stack.push(StackItem::L);
+                    self.stack.push(StackItem::L);
                 }
                 b'i' => {
                     self.struct_hlp();
@@ -330,10 +304,10 @@ impl<R: Read> BencodeParser<R> {
                     self.dump_str(byte).expect("invalid string");
                 }
                 b'e' => {
-                    match self.new_stack.top() {
+                    match self.stack.top() {
                         StackItem::L | StackItem::M => {
                             self.json.push(']');
-                            self.new_stack.pop();
+                            self.stack.pop();
                         }
                         StackItem::D | StackItem::F => {
                             self.json.push('}');
