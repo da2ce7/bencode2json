@@ -8,12 +8,14 @@ pub struct Stack {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum StackItem {
-    I, // INTEGER
-    L, // LIST
-    M, // NESTED_LIST
-    D, // DICTIONARY
-    F, // NESTED_DICTIONARY?
-    E, // END OF INTEGER, LIST OR DICTIONARY
+    I, // Integer (only used to initialize the stack).
+    // L -> M (M can repeat n times)
+    L, // LIST (swap L -> M).
+    M, // Put the delimiter (',') between list items.
+    // D -> E -> F (E -> F transition can repeat n times)
+    D, // DICTIONARY (swap D -> E).
+    E, // Put the delimiter (':') between key and value in key/value paris (swap E -> F).
+    F, // Put the delimiter (',') between key/value pairs in dictionaries (swap F -> E).
 }
 
 impl Default for Stack {
@@ -286,24 +288,29 @@ impl<R: Read> BencodeParser<R> {
 
             match byte {
                 b'd' => {
+                    // Begin of dictionary
                     self.struct_hlp();
                     self.json.push('{');
                     self.stack.push(StackItem::D);
                 }
                 b'l' => {
+                    // Begin of list
                     self.struct_hlp();
                     self.json.push('[');
                     self.stack.push(StackItem::L);
                 }
                 b'i' => {
+                    // Begin of integer
                     self.struct_hlp();
                     self.dump_int().expect("invalid integer");
                 }
                 b'0'..=b'9' => {
+                    // Begin of string
                     self.struct_hlp();
                     self.dump_str(byte).expect("invalid string");
                 }
                 b'e' => {
+                    // End of list or dictionary (not end of integer)
                     match self.stack.top() {
                         StackItem::L | StackItem::M => {
                             self.json.push(']');
