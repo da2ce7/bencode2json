@@ -6,7 +6,6 @@ pub enum Parsing {
     Integer, // todo: add ParsingInteger
     String(ParsingString),
     List(ParsingList),
-    Dictionary(ParsingDictionary),
 }
 
 #[derive(Debug, PartialEq)]
@@ -25,19 +24,6 @@ pub enum ParsingString {
 pub enum ParsingList {
     FirstItem,
     NextItem,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParsingDictionary {
-    Start,
-    FirstKeyValuePair(ParsingKeyValuePair),
-    NextKeyValuePair(ParsingKeyValuePair),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ParsingKeyValuePair {
-    Key,
-    Value,
 }
 
 pub struct BencodeParser<R: Read> {
@@ -183,70 +169,33 @@ impl<R: Read> BencodeParser<R> {
             }
 
             match byte {
-                b'i' => {
-                    match self.stack.last() {
-                        Some(state) => {
-                            match state {
-                                Parsing::List(parsing_list) => match parsing_list {
-                                    ParsingList::FirstItem => {
-                                        self.stack.push(Parsing::Integer);
-                                    }
-                                    ParsingList::NextItem => {
-                                        self.stack.push(Parsing::Integer);
-                                        self.json.push(',');
-                                    }
-                                },
-                                Parsing::Dictionary(parsing_dictionary) => {
-                                    match parsing_dictionary {
-                                        ParsingDictionary::Start => {
-                                            panic!("invalid byte 'i', expecting string for dictionary key");
-                                        }
-                                        ParsingDictionary::FirstKeyValuePair(
-                                            first_key_value_pair,
-                                        ) => {
-                                            match first_key_value_pair {
-                                                ParsingKeyValuePair::Key => {
-                                                    panic!("invalid byte 'i', dictionary key can't be an integer");
-                                                }
-                                                ParsingKeyValuePair::Value => {
-                                                    // First key value in the dictionary is an integer
-                                                    self.stack.push(Parsing::Integer);
-                                                }
-                                            }
-                                        }
-                                        ParsingDictionary::NextKeyValuePair(
-                                            next_key_value_pair,
-                                        ) => {
-                                            match next_key_value_pair {
-                                                ParsingKeyValuePair::Key => {
-                                                    panic!("invalid byte 'i', dictionary key can't be an integer");
-                                                }
-                                                ParsingKeyValuePair::Value => {
-                                                    // Next key value in the dictionary is an integer
-                                                    self.stack.push(Parsing::Integer);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                Parsing::Integer => {
-                                    panic!("invalid byte, parsing integer expected digit")
-                                }
-                                Parsing::String(parsing_string) => match parsing_string {
-                                    ParsingString::Length => {
-                                        panic!("unexpected byte 'i', parsing string length ")
-                                    }
-                                    ParsingString::Chars => {
-                                        self.process_string_value_byte(byte);
-                                    }
-                                },
+                b'i' => match self.stack.last() {
+                    Some(state) => match state {
+                        Parsing::List(parsing_list) => match parsing_list {
+                            ParsingList::FirstItem => {
+                                self.stack.push(Parsing::Integer);
                             }
+                            ParsingList::NextItem => {
+                                self.stack.push(Parsing::Integer);
+                                self.json.push(',');
+                            }
+                        },
+                        Parsing::Integer => {
+                            panic!("invalid byte, parsing integer expected digit")
                         }
-                        None => {
-                            self.stack.push(Parsing::Integer);
-                        }
+                        Parsing::String(parsing_string) => match parsing_string {
+                            ParsingString::Length => {
+                                panic!("unexpected byte 'i', parsing string length ")
+                            }
+                            ParsingString::Chars => {
+                                self.process_string_value_byte(byte);
+                            }
+                        },
+                    },
+                    None => {
+                        self.stack.push(Parsing::Integer);
                     }
-                }
+                },
                 b'0'..=b'9' => {
                     match self.stack.last() {
                         Some(state) => match state {
@@ -280,68 +229,6 @@ impl<R: Read> BencodeParser<R> {
                                         self.stack.push(Parsing::String(ParsingString::Length));
 
                                         self.json.push(',');
-                                    }
-                                }
-                            }
-                            Parsing::Dictionary(parsing_dictionary) => {
-                                match parsing_dictionary {
-                                    ParsingDictionary::Start => {
-                                        // First key in the dictionary
-
-                                        self.stack.push(Parsing::Dictionary(
-                                            ParsingDictionary::FirstKeyValuePair(
-                                                ParsingKeyValuePair::Key,
-                                            ),
-                                        ));
-
-                                        self.string_parser.new_string_starting_with(byte);
-
-                                        self.stack.push(Parsing::String(ParsingString::Length));
-                                    }
-                                    ParsingDictionary::FirstKeyValuePair(
-                                        parsing_first_key_value_pair,
-                                    ) => {
-                                        match parsing_first_key_value_pair {
-                                            ParsingKeyValuePair::Key => {
-                                                todo!()
-                                            }
-                                            ParsingKeyValuePair::Value => {
-                                                // First key value in the dictionary and it's an string
-
-                                                self.string_parser.new_string_starting_with(byte);
-
-                                                self.stack
-                                                    .push(Parsing::String(ParsingString::Length));
-                                            }
-                                        }
-                                    }
-                                    ParsingDictionary::NextKeyValuePair(
-                                        parsing_next_key_value_pair,
-                                    ) => {
-                                        match parsing_next_key_value_pair {
-                                            ParsingKeyValuePair::Key => {
-                                                /*self.stack.push(State::ParsingDictionary(
-                                                    ParsingDictionary::NextKeyValuePair(
-                                                        ParsingKeyValuePair::Key,
-                                                    ),
-                                                ));*/
-
-                                                self.string_parser.new_string_starting_with(byte);
-
-                                                self.stack
-                                                    .push(Parsing::String(ParsingString::Length));
-
-                                                self.json.push(',');
-                                            }
-                                            ParsingKeyValuePair::Value => {
-                                                // Next key value in the dictionary and it's an string
-
-                                                self.string_parser.new_string_starting_with(byte);
-
-                                                self.stack
-                                                    .push(Parsing::String(ParsingString::Length));
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -386,11 +273,6 @@ impl<R: Read> BencodeParser<R> {
                             }
                             ParsingList::NextItem => {}
                         },
-                        Parsing::Dictionary(parsing_dictionary) => match parsing_dictionary {
-                            ParsingDictionary::Start => todo!(),
-                            ParsingDictionary::FirstKeyValuePair(_) => todo!(),
-                            ParsingDictionary::NextKeyValuePair(_) => todo!(),
-                        },
                         Parsing::Integer => {}
                         Parsing::String(parsing_string) => match parsing_string {
                             ParsingString::Length => {
@@ -406,14 +288,7 @@ impl<R: Read> BencodeParser<R> {
                         self.json.push('[');
                     }
                 },
-                b'd' => match self.stack.last() {
-                    Some(_) => todo!(),
-                    None => {
-                        self.stack
-                            .push(Parsing::Dictionary(ParsingDictionary::Start));
-                        self.json.push('{');
-                    }
-                },
+                b'd' => todo!(),
                 b'e' => {
                     match self.stack.last() {
                         Some(state) => match state {
@@ -422,52 +297,9 @@ impl<R: Read> BencodeParser<R> {
                                 self.stack.pop();
                                 self.json.push(']');
                             }
-                            Parsing::Dictionary(parsing_dictionary) => {
-                                match parsing_dictionary {
-                                    ParsingDictionary::Start => {
-                                        // We have finished parsing the dictionary (empty dictionary)
-                                        self.stack.pop();
-                                        self.json.push('}');
-                                    }
-                                    ParsingDictionary::FirstKeyValuePair(
-                                        parsing_first_key_value_pair,
-                                    ) => {
-                                        match parsing_first_key_value_pair {
-                                            ParsingKeyValuePair::Key => todo!(),
-                                            ParsingKeyValuePair::Value => {
-                                                {
-                                                    // We have finished parsing the dictionary (with one key/value pair)
-                                                    self.stack.pop();
-
-                                                    self.json.push('}');
-
-                                                    self.stack.pop();
-                                                }
-                                            }
-                                        }
-                                    }
-                                    ParsingDictionary::NextKeyValuePair(
-                                        parsing_next_key_value_pair,
-                                    ) => match parsing_next_key_value_pair {
-                                        ParsingKeyValuePair::Key => {
-                                            {
-                                                // We have finished parsing the dictionary (with one key/value pair)
-                                                self.stack.pop();
-
-                                                self.json.push('}');
-
-                                                self.stack.pop();
-                                            }
-                                        }
-                                        ParsingKeyValuePair::Value => todo!(),
-                                    },
-                                }
-                            }
                             Parsing::Integer => {
                                 // We have finished parsing the integer
                                 self.stack.pop();
-                                self.check_end_first_key_value_pair_in_dictionary();
-                                self.check_end_next_key_value_pair_in_dictionary();
                             }
                             Parsing::String(parsing_string) => match parsing_string {
                                 ParsingString::Length => {
@@ -481,12 +313,11 @@ impl<R: Read> BencodeParser<R> {
                         None => panic!("invalid byte, unexpected end byte `e`"),
                     }
 
-                    self.check_first_list_item();
+                    self.check_end_first_list_item();
                 }
                 _ => match self.stack.last() {
                     Some(state) => match state {
                         Parsing::List(_) => {}
-                        Parsing::Dictionary(_) => {}
                         Parsing::Integer => {}
                         Parsing::String(parsing_string) => match parsing_string {
                             ParsingString::Length => {}
@@ -535,13 +366,12 @@ impl<R: Read> BencodeParser<R> {
 
             // We have finished parsing the string
             self.stack.pop();
-            self.check_first_list_item();
-            self.check_end_dictionary_key();
+            self.check_end_first_list_item();
         }
     }
 
     #[allow(clippy::single_match)]
-    fn check_first_list_item(&mut self) {
+    fn check_end_first_list_item(&mut self) {
         match self.stack.last() {
             Some(state) => match state {
                 Parsing::List(parsing_list) => match parsing_list {
@@ -553,127 +383,6 @@ impl<R: Read> BencodeParser<R> {
                 },
                 Parsing::Integer => {}
                 Parsing::String(_parsing_string) => {}
-                Parsing::Dictionary(_parsing_dictionary) => {}
-            },
-            None => {}
-        }
-    }
-
-    #[allow(clippy::single_match)]
-    #[allow(clippy::match_same_arms)]
-    fn check_end_dictionary_key(&mut self) {
-        match self.stack.last() {
-            Some(state) => match state {
-                Parsing::Integer => {}
-                Parsing::String(_) => {}
-                Parsing::List(_) => {}
-                Parsing::Dictionary(parsing_dictionary) => match parsing_dictionary {
-                    ParsingDictionary::Start => {}
-                    ParsingDictionary::FirstKeyValuePair(parsing_first_key_value_pair) => {
-                        match parsing_first_key_value_pair {
-                            ParsingKeyValuePair::Key => {
-                                self.stack.pop();
-                                self.stack.push(Parsing::Dictionary(
-                                    ParsingDictionary::FirstKeyValuePair(
-                                        ParsingKeyValuePair::Value,
-                                    ),
-                                ));
-                                self.json.push(':');
-                            }
-                            ParsingKeyValuePair::Value => {}
-                        }
-                    }
-                    ParsingDictionary::NextKeyValuePair(parsing_next_key_value_pair) => {
-                        match parsing_next_key_value_pair {
-                            ParsingKeyValuePair::Key => {
-                                self.stack.pop();
-                                self.stack.push(Parsing::Dictionary(
-                                    ParsingDictionary::NextKeyValuePair(ParsingKeyValuePair::Value),
-                                ));
-                                self.json.push(':');
-                            }
-                            ParsingKeyValuePair::Value => {}
-                        }
-                    }
-                },
-            },
-            None => {}
-        }
-    }
-
-    // todo: check end dictionary key/value first pair
-
-    #[allow(clippy::single_match)]
-    #[allow(clippy::match_same_arms)]
-    fn check_end_first_key_value_pair_in_dictionary(&mut self) {
-        match self.stack.last() {
-            Some(state) => match state {
-                Parsing::Integer => {}
-                Parsing::String(_) => {}
-                Parsing::List(_) => {}
-                Parsing::Dictionary(parsing_dictionary) => match parsing_dictionary {
-                    ParsingDictionary::Start => {}
-                    ParsingDictionary::FirstKeyValuePair(parsing_first_key_value_pair) => {
-                        match parsing_first_key_value_pair {
-                            ParsingKeyValuePair::Key => {}
-                            ParsingKeyValuePair::Value => {
-                                self.stack.pop();
-                                self.stack.push(Parsing::Dictionary(
-                                    ParsingDictionary::NextKeyValuePair(ParsingKeyValuePair::Key),
-                                ));
-                            }
-                        }
-                    }
-                    ParsingDictionary::NextKeyValuePair(parsing_next_key_value_pair) => {
-                        match parsing_next_key_value_pair {
-                            ParsingKeyValuePair::Key => {}
-                            ParsingKeyValuePair::Value => {
-                                self.stack.pop();
-                                /*self.stack.push(State::ParsingDictionary(
-                                    ParsingDictionary::NextKeyValuePair(ParsingKeyValuePair::Key),
-                                ));*/
-                            }
-                        }
-                    }
-                },
-            },
-            None => {}
-        }
-    }
-
-    #[allow(clippy::single_match)]
-    #[allow(clippy::match_same_arms)]
-    fn check_end_next_key_value_pair_in_dictionary(&mut self) {
-        match self.stack.last() {
-            Some(state) => match state {
-                Parsing::Integer => {}
-                Parsing::String(_) => {}
-                Parsing::List(_) => {}
-                Parsing::Dictionary(parsing_dictionary) => match parsing_dictionary {
-                    ParsingDictionary::Start => {}
-                    ParsingDictionary::FirstKeyValuePair(parsing_first_key_value_pair) => {
-                        match parsing_first_key_value_pair {
-                            ParsingKeyValuePair::Key => {}
-                            ParsingKeyValuePair::Value => {
-                                self.stack.pop();
-                                self.stack.push(Parsing::Dictionary(
-                                    ParsingDictionary::NextKeyValuePair(ParsingKeyValuePair::Key),
-                                ));
-                            }
-                        }
-                    }
-                    ParsingDictionary::NextKeyValuePair(parsing_next_key_value_pair) => {
-                        match parsing_next_key_value_pair {
-                            ParsingKeyValuePair::Key => {}
-                            ParsingKeyValuePair::Value => {
-                                self.stack.pop();
-                                /*self.stack.push(State::ParsingDictionary(
-                                    ParsingDictionary::NextKeyValuePair(ParsingKeyValuePair::Key),
-                                ));*/
-                            }
-                        }
-                    }
-                },
             },
             None => {}
         }
@@ -854,6 +563,7 @@ mod tests {
                 }
 
                 /* todo:
+                    - Nested list with two items
                     - Nested list with UTF-8 string
                     - Nested list with non UTF-8 string
 
@@ -1016,6 +726,7 @@ mod tests {
         */
 
         #[test]
+        #[ignore]
         fn empty_dictionary() {
             let data = b"de";
 
@@ -1029,6 +740,7 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
+            #[ignore]
             fn integer() {
                 let data = b"d3:fooi42ee";
 
@@ -1039,6 +751,7 @@ mod tests {
             }
 
             #[test]
+            #[ignore]
             fn utf8_string() {
                 let data = b"d3:bar4:spame";
 
@@ -1049,6 +762,7 @@ mod tests {
             }
 
             #[test]
+            #[ignore]
             fn non_utf8_string() {
                 let data = b"d3:bar2:\xFF\xFEe";
 
@@ -1063,6 +777,7 @@ mod tests {
             use crate::BencodeParser;
 
             #[test]
+            #[ignore]
             fn two_integers() {
                 // Dictionary with two integers: d3:bari42e3:fooi43ee
                 //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20 (pos)
