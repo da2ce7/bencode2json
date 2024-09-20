@@ -209,6 +209,8 @@ impl<R: Read> BencodeParser<R> {
 
         // Parse length
 
+        // todo: move the loop inside the string_parser like dump_int
+
         loop {
             let byte = match self.read_byte() {
                 Ok(byte) => byte,
@@ -287,18 +289,6 @@ impl<R: Read> BencodeParser<R> {
             }
 
             match byte {
-                b'd' => {
-                    // Begin of dictionary
-                    self.struct_hlp();
-                    self.json.push('{');
-                    self.stack.push(StackItem::D);
-                }
-                b'l' => {
-                    // Begin of list
-                    self.struct_hlp();
-                    self.json.push('[');
-                    self.stack.push(StackItem::L);
-                }
                 b'i' => {
                     // Begin of integer
                     self.struct_hlp();
@@ -308,6 +298,18 @@ impl<R: Read> BencodeParser<R> {
                     // Begin of string
                     self.struct_hlp();
                     self.dump_str(byte).expect("invalid string");
+                }
+                b'l' => {
+                    // Begin of list
+                    self.struct_hlp();
+                    self.json.push('[');
+                    self.stack.push(StackItem::L);
+                }
+                b'd' => {
+                    // Begin of dictionary
+                    self.struct_hlp();
+                    self.json.push('{');
+                    self.stack.push(StackItem::D);
                 }
                 b'e' => {
                     // End of list or dictionary (not end of integer)
