@@ -2,8 +2,10 @@ alicee
 alicei
 bencoded
 bobe
+bobee
 Deque
 eggse
+elee
 fdfc
 fffe
 fffefdfc
@@ -11,3 +13,4 @@ fooi
 llee
 llleee
 spame
+spamee

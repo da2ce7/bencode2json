@@ -517,8 +517,13 @@ mod tests {
             mod of_type_list {
                 use crate::BencodeParser;
 
+                /* todo:
+                    - Main list empty, nested list two items:
+                        - Nested list with non UTF-8 string
+                */
+
                 #[test]
-                fn nested_empty_list() {
+                fn two_nested_empty_list() {
                     // List with one empty list: llee
                     //   1   2   3   4 (pos)
                     //   l   l   e   e (byte)
@@ -533,7 +538,7 @@ mod tests {
                 }
 
                 #[test]
-                fn two_nested_empty_lists() {
+                fn three_nested_empty_lists() {
                     // List with two nested empty lists: llleee
                     //   1   2   3   4   5   6 (pos)
                     //   l   l   l   e   e   e (byte)
@@ -548,9 +553,9 @@ mod tests {
                 }
 
                 #[test]
-                fn nested_list_with_integer() {
+                fn one_nested_list_which_contains_one_integer() {
                     // List with one empty list: lli42eee
-                    //   1   2   3   4   5   6   7   4 (pos)
+                    //   1   2   3   4   5   6   7   8 (pos)
                     //   l   l   i   4   2   e   e   e (byte)
                     // 108 108 105  52  50 101 101 101 (byte decimal)
 
@@ -562,15 +567,50 @@ mod tests {
                     assert_eq!(parser.json, "[[42]]".to_string());
                 }
 
-                /* todo:
-                    - Nested list with two items
-                    - Nested list with UTF-8 string
-                    - Nested list with non UTF-8 string
+                #[test]
+                fn one_nested_list_which_contains_two_integers() {
+                    // List with one empty list: lli42ei43eee
+                    //   1   2   3   4   5   6   7   8   9  10 11  12 (pos)
+                    //   l   l   i   4   2   e   i   4   3   e  e   e (byte)
+                    // 108 108 105  52  50 101 105  52 105 101 101 101 (byte decimal)
 
-                    - Two nested lists with one integer each
-                    - Two nested lists with one UTF-8 string each
-                    - Two nested lists with one non UTF-8 string each
-                */
+                    let data = b"lli42ei43eee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[[42,43]]".to_string());
+                }
+
+                #[test]
+                fn one_nested_list_which_contains_one_utf_8_string() {
+                    // List with one empty list: ll4:spamee
+                    //   1   2   3   4   5   6   7   8   9  10 (pos)
+                    //   l   l   4   :   s   p   a   m   e   e (byte)
+                    // 108 108  52  58 115 112  97 109 101 101  (byte decimal)
+
+                    let data = b"ll4:spamee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[[\"spam\"]]".to_string());
+                }
+
+                #[test]
+                fn one_nested_list_which_contains_two_utf_8_strings() {
+                    // List with one empty list: ll5:alice3:bobee
+                    //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16 (pos)
+                    //   l   l   5   :   a   l   i   c   e   3   :   b   o   b   e   e (byte)
+                    // 108 108  53  58  97 108 105  99 101  51  58  98 111  98 101 101 (byte decimal)
+
+                    let data = b"ll5:alice3:bobee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[[\"alice\",\"bob\"]]".to_string());
+                }
             }
 
             /* todo:
@@ -692,8 +732,21 @@ mod tests {
                 assert_eq!(parser.json, "[\"<hex>fffe</hex>\",42]".to_string());
             }
 
+            mod integer_and_list {
+                use crate::BencodeParser;
+
+                #[test]
+                fn second_item_empty_list() {
+                    let data = b"li42elee";
+
+                    let mut parser = BencodeParser::new(&data[..]);
+                    parser.parse().unwrap();
+
+                    assert_eq!(parser.json, "[42,[]]".to_string());
+                }
+            }
+
             /* todo:
-                - Integer and list
                 - Integer and dictionary
 
                 - UTF-8 string and list
