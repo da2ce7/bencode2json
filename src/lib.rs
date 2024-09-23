@@ -200,7 +200,7 @@ impl<R: Read> BencodeParser<R> {
     /// Called when the first byt of a bencoded value (integer, string, list or dict)
     /// is received.
     pub fn begin_bencoded_value(&mut self) {
-        match self.stack.top() {
+        match self.stack.peek() {
             State::D => {
                 self.stack.swap_top(State::E);
             }
@@ -229,7 +229,7 @@ impl<R: Read> BencodeParser<R> {
     ///
     /// Will panic
     pub fn end_bencoded_value(&mut self) {
-        match self.stack.top() {
+        match self.stack.peek() {
             State::L | State::M => {
                 self.json.push(']');
                 self.stack.pop();

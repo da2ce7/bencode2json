@@ -1,3 +1,8 @@
+//! The stack used by the Bencoded to JSON converter to keep track of the 
+//! current parsing state.
+
+// code-review: should we use a fixed array to avoid heap fragmentation?
+
 #[derive(Debug)]
 pub struct Stack {
     items: Vec<State>,
@@ -30,23 +35,24 @@ impl Stack {
     }
 
     pub fn pop(&mut self) {
+        // Panic if the top element is the initial state.
         self.items.pop();
     }
 
     pub fn swap_top(&mut self, new_item: State) {
+        // Panic if the top element is the initial state.
         self.items.pop();
         self.push(new_item);
     }
 
-    /// It return the top element on the stack.
-    ///
-    /// The stack user should never pop if it's not sure there is an element.
+    /// It returns the top element on the stack without removing it.
     ///
     /// # Panics
     ///
-    /// Will panic is the stack is empty.
+    /// Will panic is the stack is empty. The stack is never empty because it's
+    /// not allowed to pop the initial state.
     #[must_use]
-    pub fn top(&self) -> State {
+    pub fn peek(&self) -> State {
         match self.items.last() {
             Some(top) => top.clone(),
             None => panic!("empty stack!"),
@@ -62,7 +68,7 @@ mod tests {
 
         #[test]
         fn have_an_initial_state() {
-            assert_eq!(Stack::default().top(), State::Initial);
+            assert_eq!(Stack::default().peek(), State::Initial);
         }
 
         // todo: the rest of operations on the stack.
