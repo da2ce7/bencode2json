@@ -390,12 +390,17 @@ mod tests {
 
         #[test]
         fn one_digit_integer() {
-            assert_eq!(to_json(b"i0e"), "0".to_string());
+            assert_eq!(to_json(b"i1e"), "1".to_string());
         }
 
         #[test]
         fn two_digits_integer() {
             assert_eq!(to_json(b"i42e"), "42".to_string());
+        }
+
+        #[test]
+        fn negative_integer() {
+            assert_eq!(to_json(b"i-1e"), "-1".to_string());
         }
 
         // todo: all encodings with a leading zero, such as i03e, are invalid, other
