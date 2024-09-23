@@ -1,51 +1,9 @@
 use std::io::{self, Read};
 use std::str;
 
-#[derive(Debug)]
-pub struct Stack {
-    items: Vec<StackItem>,
-}
+use stack::{Stack, State};
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum StackItem {
-    I, // Integer (only used to initialize the stack).
-    // L -> M (M can repeat n times)
-    L, // LIST (swap L -> M).
-    M, // Put the delimiter (',') between list items.
-    // D -> E -> F (E -> F transition can repeat n times)
-    D, // DICTIONARY (swap D -> E).
-    E, // Put the delimiter (':') between key and value in key/value paris (swap E -> F).
-    F, // Put the delimiter (',') between key/value pairs in dictionaries (swap F -> E).
-}
-
-impl Default for Stack {
-    fn default() -> Self {
-        let items = vec![StackItem::I];
-        Self { items }
-    }
-}
-
-impl Stack {
-    fn push(&mut self, item: StackItem) {
-        self.items.push(item);
-    }
-
-    fn pop(&mut self) {
-        self.items.pop();
-    }
-
-    fn swap_top(&mut self, new_item: StackItem) {
-        self.items.pop();
-        self.push(new_item);
-    }
-
-    fn top(&self) -> StackItem {
-        match self.items.last() {
-            Some(top) => top.clone(),
-            None => panic!("empty stack!"),
-        }
-    }
-}
+pub mod stack;
 
 pub struct BencodeParser<R: Read> {
     pub debug: bool,
@@ -142,7 +100,7 @@ impl StringParser {
 impl<R: Read> BencodeParser<R> {
     pub fn new(reader: R) -> Self {
         BencodeParser {
-            debug: false,
+            debug: false, // todo: use tracing crate
             reader,
             stack: Stack::default(),
             json: String::new(),
@@ -152,28 +110,142 @@ impl<R: Read> BencodeParser<R> {
         }
     }
 
-    pub fn struct_hlp(&mut self) {
+    /// todo
+    ///
+    /// # Errors
+    ///
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Will panic if ...
+    #[allow(clippy::match_on_vec_items)]
+    #[allow(clippy::single_match)]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::match_same_arms)]
+    #[allow(clippy::single_match_else)]
+    pub fn parse(&mut self) -> io::Result<()> {
+        loop {
+            let byte = match self.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    break;
+                }
+                Err(err) => return Err(err),
+            };
+
+            if self.debug {
+                println!("iter: {}", self.iter);
+                println!("pos: {}", self.pos);
+                println!("byte: {} ({})", byte, byte as char);
+            }
+
+            match byte {
+                b'i' => {
+                    // Begin of integer
+                    self.begin_bencoded_value();
+                    self.parser_integer().expect("invalid integer");
+                }
+                b'0'..=b'9' => {
+                    // Begin of string
+                    self.begin_bencoded_value();
+                    self.parse_string(byte).expect("invalid string");
+                }
+                b'l' => {
+                    // Begin of list
+                    self.begin_bencoded_value();
+                    self.json.push('[');
+                    self.stack.push(State::L);
+                }
+                b'd' => {
+                    // Begin of dictionary
+                    self.begin_bencoded_value();
+                    self.json.push('{');
+                    self.stack.push(State::D);
+                }
+                b'e' => {
+                    // End of list or dictionary (not end of integer)
+                    self.end_bencoded_value();
+                }
+                _ => {
+                    panic!("{}", format!("unexpected byte {} ({})", byte, byte as char));
+                }
+            }
+
+            if self.debug {
+                println!("stack: {:?}", self.stack);
+                //println!("string_parser: {:#?}", self.string_parser);
+                match &self.captured_input {
+                    Some(captured_input) => match str::from_utf8(captured_input) {
+                        Ok(string) => println!("input: {string}"),
+                        Err(_) => println!("input: {captured_input:#?}"),
+                    },
+                    None => {}
+                }
+                println!("output: {}", self.json);
+                println!();
+            }
+
+            self.iter += 1;
+        }
+
+        // todo: if we exit the loop with a non empty stack, that's an error (incomplete bencode value).
+
+        Ok(())
+    }
+
+    /// It updates the stack state and prints the delimiters when needed.
+    ///
+    /// Called when the first byt of a bencoded value (integer, string, list or dict)
+    /// is received.
+    pub fn begin_bencoded_value(&mut self) {
         match self.stack.top() {
-            StackItem::D => {
-                self.stack.swap_top(StackItem::E);
+            State::D => {
+                self.stack.swap_top(State::E);
             }
-            StackItem::E => {
+            State::E => {
                 self.json.push(':');
-                self.stack.swap_top(StackItem::F);
+                self.stack.swap_top(State::F);
             }
-            StackItem::F => {
+            State::F => {
                 self.json.push(',');
-                self.stack.swap_top(StackItem::E);
+                self.stack.swap_top(State::E);
             }
-            StackItem::L => {
-                self.stack.swap_top(StackItem::M);
+            State::L => {
+                self.stack.swap_top(State::M);
             }
-            StackItem::M => self.json.push(','),
-            StackItem::I => {}
+            State::M => self.json.push(','),
+            State::Initial => {}
         }
     }
 
-    fn dump_int(&mut self) -> io::Result<()> {
+    /// It updates the stack state and prints the delimiters when needed.
+    ///
+    /// Called when the end of list or dictionary byte is received. End of
+    /// integers or strings are processed while parsing them.
+    ///
+    /// # Panics
+    ///
+    /// Will panic
+    pub fn end_bencoded_value(&mut self) {
+        match self.stack.top() {
+            State::L | State::M => {
+                self.json.push(']');
+                self.stack.pop();
+            }
+            State::D | State::F => {
+                self.json.push('}');
+            }
+            State::E | State::Initial => {
+                // todo: pass the type of value (list or dict) to customize the error message
+                panic!("error parsing end of list or dictionary, unexpected initial state on the stack")
+            }
+        }
+        // todo: sp < stack. What this conditions does in the C implementation?
+    }
+
+    fn parser_integer(&mut self) -> io::Result<()> {
         let mut st = 0;
 
         loop {
@@ -202,7 +274,7 @@ impl<R: Read> BencodeParser<R> {
         }
     }
 
-    fn dump_str(&mut self, byte: u8) -> io::Result<()> {
+    fn parse_string(&mut self, byte: u8) -> io::Result<()> {
         let mut string_parser = StringParser::default();
 
         string_parser.new_string_starting_with(byte);
@@ -251,103 +323,6 @@ impl<R: Read> BencodeParser<R> {
         self.json.push_str(&string_parser.json());
 
         //println!("string_parser {string_parser:#?}");
-
-        Ok(())
-    }
-
-    /// todo
-    ///
-    /// # Errors
-    ///
-    ///
-    ///
-    /// # Panics
-    ///
-    /// Will panic if ...
-    #[allow(clippy::match_on_vec_items)]
-    #[allow(clippy::single_match)]
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::match_same_arms)]
-    #[allow(clippy::single_match_else)]
-    pub fn parse(&mut self) -> io::Result<()> {
-        loop {
-            let byte = match self.read_byte() {
-                Ok(byte) => byte,
-                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                    //println!("Reached the end of file.");
-                    break;
-                }
-                Err(err) => return Err(err),
-            };
-
-            if self.debug {
-                println!("iter: {}", self.iter);
-                println!("pos: {}", self.pos);
-                println!("byte: {} ({})", byte, byte as char);
-            }
-
-            match byte {
-                b'i' => {
-                    // Begin of integer
-                    self.struct_hlp();
-                    self.dump_int().expect("invalid integer");
-                }
-                b'0'..=b'9' => {
-                    // Begin of string
-                    self.struct_hlp();
-                    self.dump_str(byte).expect("invalid string");
-                }
-                b'l' => {
-                    // Begin of list
-                    self.struct_hlp();
-                    self.json.push('[');
-                    self.stack.push(StackItem::L);
-                }
-                b'd' => {
-                    // Begin of dictionary
-                    self.struct_hlp();
-                    self.json.push('{');
-                    self.stack.push(StackItem::D);
-                }
-                b'e' => {
-                    // End of list or dictionary (not end of integer)
-                    match self.stack.top() {
-                        StackItem::L | StackItem::M => {
-                            self.json.push(']');
-                            self.stack.pop();
-                        }
-                        StackItem::D | StackItem::F => {
-                            self.json.push('}');
-                        }
-                        StackItem::E | StackItem::I => {
-                            panic!("error parsing end, unexpected item I on the stack")
-                        }
-                    }
-                    // todo: sp < stack
-                }
-                _ => {
-                    panic!("{}", format!("unexpected byte {} ({})", byte, byte as char));
-                }
-            }
-
-            if self.debug {
-                println!("stack: {:?}", self.stack);
-                //println!("string_parser: {:#?}", self.string_parser);
-                match &self.captured_input {
-                    Some(captured_input) => match str::from_utf8(captured_input) {
-                        Ok(string) => println!("input: {string}"),
-                        Err(_) => println!("input: {captured_input:#?}"),
-                    },
-                    None => {}
-                }
-                println!("output: {}", self.json);
-                println!();
-            }
-
-            self.iter += 1;
-        }
-
-        // todo: if we exit the loop with a non empty stack, that's an error (incomplete bencode value).
 
         Ok(())
     }
