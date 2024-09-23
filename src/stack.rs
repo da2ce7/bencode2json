@@ -1,4 +1,4 @@
-//! The stack used by the Bencoded to JSON converter to keep track of the 
+//! The stack used by the Bencoded to JSON converter to keep track of the
 //! current parsing state.
 
 // code-review: should we use a fixed array to avoid heap fragmentation?
@@ -10,13 +10,19 @@ pub struct Stack {
 
 // todo: rename states
 
+/// States while parsing list or dictionaries.
+///
+/// There are no states for integers and strings because it's a straightforward
+/// operation. We know when they finish and there is no recursion.
 #[derive(Debug, PartialEq, Clone)]
 pub enum State {
     Initial,
-    // For lists
-    L, // LIST (swap L -> M).
-    M, // Put the delimiter (',') between list items.
-    // For dictionaries
+
+    // States while parsing lists
+    L,
+    M,
+
+    // States while parsing dictionaries
     D,
     E,
     F,
