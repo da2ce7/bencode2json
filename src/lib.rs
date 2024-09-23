@@ -413,14 +413,14 @@ mod tests {
 
         #[test]
         fn utf8() {
-            assert_eq!(to_json(b"4:spam"), "\"spam\"".to_string());
+            assert_eq!(to_json(b"4:spam"), r#""spam""#.to_string());
         }
 
         #[test]
         fn non_utf8() {
             assert_eq!(
                 to_json(b"4:\xFF\xFE\xFD\xFC"),
-                "\"<hex>fffefdfc</hex>\"".to_string()
+                r#""<hex>fffefdfc</hex>""#.to_string()
             );
         }
 
@@ -448,14 +448,14 @@ mod tests {
 
             #[test]
             fn utf8_string() {
-                assert_eq!(to_json(b"l4:spame"), "[\"spam\"]".to_string());
+                assert_eq!(to_json(b"l4:spame"), r#"["spam"]"#.to_string());
             }
 
             #[test]
             fn non_utf8_string() {
                 assert_eq!(
                     to_json(b"l4:\xFF\xFE\xFD\xFCe"),
-                    "[\"<hex>fffefdfc</hex>\"]".to_string()
+                    r#"["<hex>fffefdfc</hex>"]"#.to_string()
                 );
             }
 
@@ -489,14 +489,14 @@ mod tests {
 
                 #[test]
                 fn one_nested_list_which_contains_one_utf_8_string() {
-                    assert_eq!(to_json(b"ll4:spamee"), "[[\"spam\"]]".to_string());
+                    assert_eq!(to_json(b"ll4:spamee"), r#"[["spam"]]"#.to_string());
                 }
 
                 #[test]
                 fn one_nested_list_which_contains_two_utf_8_strings() {
                     assert_eq!(
                         to_json(b"ll5:alice3:bobee"),
-                        "[[\"alice\",\"bob\"]]".to_string()
+                        r#"[["alice","bob"]]"#.to_string()
                     );
                 }
             }
@@ -516,17 +516,14 @@ mod tests {
 
             #[test]
             fn two_utf8_strings() {
-                assert_eq!(
-                    to_json(b"l5:alice3:bobe"),
-                    "[\"alice\",\"bob\"]".to_string()
-                );
+                assert_eq!(to_json(b"l5:alice3:bobe"), r#"["alice","bob"]"#.to_string());
             }
 
             #[test]
             fn two_non_utf8_strings() {
                 assert_eq!(
                     to_json(b"l2:\xFF\xFE2:\xFD\xFCe"),
-                    "[\"<hex>fffe</hex>\",\"<hex>fdfc</hex>\"]".to_string()
+                    r#"["<hex>fffe</hex>","<hex>fdfc</hex>"]"#.to_string()
                 );
             }
         }
@@ -536,27 +533,27 @@ mod tests {
 
             #[test]
             fn integer_and_utf8_string() {
-                assert_eq!(to_json(b"li42e5:alicee"), "[42,\"alice\"]".to_string());
+                assert_eq!(to_json(b"li42e5:alicee"), r#"[42,"alice"]"#.to_string());
             }
 
             #[test]
             fn integer_and_non_utf8_string() {
                 assert_eq!(
                     to_json(b"li42e2:\xFF\xFEe"),
-                    "[42,\"<hex>fffe</hex>\"]".to_string()
+                    r#"[42,"<hex>fffe</hex>"]"#.to_string()
                 );
             }
 
             #[test]
             fn utf8_string_and_integer() {
-                assert_eq!(to_json(b"l5:alicei42ee"), "[\"alice\",42]".to_string());
+                assert_eq!(to_json(b"l5:alicei42ee"), r#"["alice",42]"#.to_string());
             }
 
             #[test]
             fn non_utf8_string_and_an_integer() {
                 assert_eq!(
                     to_json(b"l2:\xFF\xFEi42ee"),
-                    "[\"<hex>fffe</hex>\",42]".to_string()
+                    r#"["<hex>fffe</hex>",42]"#.to_string()
                 );
             }
 
@@ -611,19 +608,19 @@ mod tests {
 
             #[test]
             fn integer() {
-                assert_eq!(to_json(b"d3:fooi42ee"), "{\"foo\":42}".to_string());
+                assert_eq!(to_json(b"d3:fooi42ee"), r#"{"foo":42}"#.to_string());
             }
 
             #[test]
             fn utf8_string() {
-                assert_eq!(to_json(b"d3:bar4:spame"), "{\"bar\":\"spam\"}".to_string());
+                assert_eq!(to_json(b"d3:bar4:spame"), r#"{"bar":"spam"}"#.to_string());
             }
 
             #[test]
             fn non_utf8_string() {
                 assert_eq!(
                     to_json(b"d3:bar2:\xFF\xFEe"),
-                    "{\"bar\":\"<hex>fffe</hex>\"}".to_string()
+                    r#"{"bar":"<hex>fffe</hex>"}"#.to_string()
                 );
             }
         }
@@ -635,7 +632,7 @@ mod tests {
             fn two_integers() {
                 assert_eq!(
                     to_json(b"d3:bari42e3:fooi43ee"),
-                    "{\"bar\":42,\"foo\":43}".to_string()
+                    r#"{"bar":42,"foo":43}"#.to_string()
                 );
             }
 
@@ -643,7 +640,7 @@ mod tests {
             fn two_utf8_strings() {
                 assert_eq!(
                     to_json(b"d3:bar4:spam3:foo5:alicee"),
-                    "{\"bar\":\"spam\",\"foo\":\"alice\"}".to_string()
+                    r#"{"bar":"spam","foo":"alice"}"#.to_string()
                 );
             }
         }
