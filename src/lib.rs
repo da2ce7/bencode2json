@@ -209,8 +209,6 @@ impl<R: Read> BencodeParser<R> {
 
         // Parse length
 
-        // todo: move the loop inside the string_parser like dump_int
-
         loop {
             let byte = match self.read_byte() {
                 Ok(byte) => byte,
@@ -374,15 +372,30 @@ impl<R: Read> BencodeParser<R> {
 #[cfg(test)]
 mod tests {
 
+    use crate::BencodeParser;
+
+    fn to_json(bytes: &[u8]) -> String {
+        let mut parser = BencodeParser::new(bytes);
+        parser.parse().expect("bencoded to JSON conversion failed");
+        parser.json
+    }
+
     mod integers {
-        use crate::BencodeParser;
+        use crate::tests::to_json;
 
         #[test]
-        fn integer() {
-            let data = b"i42e";
-            let mut parser = BencodeParser::new(&data[..]);
-            parser.parse().unwrap();
-            assert_eq!(parser.json, "42".to_string());
+        fn zero() {
+            assert_eq!(to_json(b"i0e"), "0".to_string());
+        }
+
+        #[test]
+        fn one_digit_integer() {
+            assert_eq!(to_json(b"i0e"), "0".to_string());
+        }
+
+        #[test]
+        fn two_digits_integer() {
+            assert_eq!(to_json(b"i42e"), "42".to_string());
         }
 
         // todo: all encodings with a leading zero, such as i03e, are invalid, other
@@ -390,7 +403,7 @@ mod tests {
     }
 
     mod strings {
-        use crate::BencodeParser;
+        use crate::tests::to_json;
 
         /* todo:
         - String with size 0 (empty string) are allowed: b"0:"
@@ -400,26 +413,15 @@ mod tests {
 
         #[test]
         fn utf8() {
-            let data = b"4:spam";
-
-            //  1   2   3   4   5   6 (pos)
-            //  4   :   s   p   a   m (byte)
-            // 52  58 115 112  97 109 (byte decimal)
-
-            let mut parser = BencodeParser::new(&data[..]);
-            parser.parse().unwrap();
-
-            assert_eq!(parser.json, "\"spam\"".to_string());
+            assert_eq!(to_json(b"4:spam"), "\"spam\"".to_string());
         }
 
         #[test]
         fn non_utf8() {
-            let data = b"4:\xFF\xFE\xFD\xFC";
-
-            let mut parser = BencodeParser::new(&data[..]);
-            parser.parse().unwrap();
-
-            assert_eq!(parser.json, "\"<hex>fffefdfc</hex>\"".to_string());
+            assert_eq!(
+                to_json(b"4:\xFF\xFE\xFD\xFC"),
+                "\"<hex>fffefdfc</hex>\"".to_string()
+            );
         }
 
         /* todo:
@@ -429,63 +431,36 @@ mod tests {
     }
 
     mod lists {
-        use crate::BencodeParser;
+        use crate::tests::to_json;
 
         #[test]
         fn empty_list() {
-            let data = b"le";
-
-            let mut parser = BencodeParser::new(&data[..]);
-            parser.parse().unwrap();
-
-            assert_eq!(parser.json, "[]".to_string());
+            assert_eq!(to_json(b"le"), "[]".to_string());
         }
 
         mod with_one_item {
-            use crate::BencodeParser;
+            use crate::tests::to_json;
 
             #[test]
             fn integer() {
-                let data = b"li42ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[42]".to_string());
+                assert_eq!(to_json(b"li42ee"), "[42]".to_string());
             }
 
             #[test]
             fn utf8_string() {
-                // List with one UTF8 string: l4:spame
-                //   1   2   3   4   5   6   7   8 (pos)
-                //   l   4   :   s   p   a   m   e (byte)
-                // 108  52  58 115 112  97 109 101 (byte decimal)
-
-                let data = b"l4:spame";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"spam\"]".to_string());
+                assert_eq!(to_json(b"l4:spame"), "[\"spam\"]".to_string());
             }
 
             #[test]
             fn non_utf8_string() {
-                // List with one UTF8 string: l4:\xFF\xFE\xFD\xFCe
-                //   1   2   3   4   5   6   7   8 (pos)
-                //   l   4   : xFF xFE xFD xFC   e (byte)
-                // 108  52  58 255 254 253 252 101 (byte decimal)
-
-                let data = b"l4:\xFF\xFE\xFD\xFCe";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"<hex>fffefdfc</hex>\"]".to_string());
+                assert_eq!(
+                    to_json(b"l4:\xFF\xFE\xFD\xFCe"),
+                    "[\"<hex>fffefdfc</hex>\"]".to_string()
+                );
             }
 
             mod of_type_list {
-                use crate::BencodeParser;
+                use crate::tests::to_json;
 
                 /* todo:
                     - Main list empty, nested list two items:
@@ -494,92 +469,35 @@ mod tests {
 
                 #[test]
                 fn two_nested_empty_list() {
-                    // List with one empty list: llee
-                    //   1   2   3   4 (pos)
-                    //   l   l   e   e (byte)
-                    // 108 108 101 101 (byte decimal)
-
-                    let data = b"llee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[]]".to_string());
+                    assert_eq!(to_json(b"llee"), "[[]]".to_string());
                 }
 
                 #[test]
                 fn three_nested_empty_lists() {
-                    // List with two nested empty lists: llleee
-                    //   1   2   3   4   5   6 (pos)
-                    //   l   l   l   e   e   e (byte)
-                    // 108 108 108 101 101 101 (byte decimal)
-
-                    let data = b"llleee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[[]]]".to_string());
+                    assert_eq!(to_json(b"llleee"), "[[[]]]".to_string());
                 }
 
                 #[test]
                 fn one_nested_list_which_contains_one_integer() {
-                    // List with one empty list: lli42eee
-                    //   1   2   3   4   5   6   7   8 (pos)
-                    //   l   l   i   4   2   e   e   e (byte)
-                    // 108 108 105  52  50 101 101 101 (byte decimal)
-
-                    let data = b"lli42eee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[42]]".to_string());
+                    assert_eq!(to_json(b"lli42eee"), "[[42]]".to_string());
                 }
 
                 #[test]
                 fn one_nested_list_which_contains_two_integers() {
-                    // List with one empty list: lli42ei43eee
-                    //   1   2   3   4   5   6   7   8   9  10 11  12 (pos)
-                    //   l   l   i   4   2   e   i   4   3   e  e   e (byte)
-                    // 108 108 105  52  50 101 105  52 105 101 101 101 (byte decimal)
-
-                    let data = b"lli42ei43eee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[42,43]]".to_string());
+                    assert_eq!(to_json(b"lli42ei43eee"), "[[42,43]]".to_string());
                 }
 
                 #[test]
                 fn one_nested_list_which_contains_one_utf_8_string() {
-                    // List with one empty list: ll4:spamee
-                    //   1   2   3   4   5   6   7   8   9  10 (pos)
-                    //   l   l   4   :   s   p   a   m   e   e (byte)
-                    // 108 108  52  58 115 112  97 109 101 101  (byte decimal)
-
-                    let data = b"ll4:spamee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[\"spam\"]]".to_string());
+                    assert_eq!(to_json(b"ll4:spamee"), "[[\"spam\"]]".to_string());
                 }
 
                 #[test]
                 fn one_nested_list_which_contains_two_utf_8_strings() {
-                    // List with one empty list: ll5:alice3:bobee
-                    //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16 (pos)
-                    //   l   l   5   :   a   l   i   c   e   3   :   b   o   b   e   e (byte)
-                    // 108 108  53  58  97 108 105  99 101  51  58  98 111  98 101 101 (byte decimal)
-
-                    let data = b"ll5:alice3:bobee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[[\"alice\",\"bob\"]]".to_string());
+                    assert_eq!(
+                        to_json(b"ll5:alice3:bobee"),
+                        "[[\"alice\",\"bob\"]]".to_string()
+                    );
                 }
             }
 
@@ -589,130 +507,65 @@ mod tests {
         }
 
         mod with_two_items_of_the_same_type {
-            use crate::BencodeParser;
+            use crate::tests::to_json;
 
             #[test]
             fn two_integers() {
-                // List with two integers: li42ei43ee
-                //   1   2   3   4   5   6   7   8   9  10 (pos)
-                //   l   i   4   2   e   i   4   3   e   e (byte)
-                // 108 105  52  50 101 105  52  51 101 101 (byte decimal)
-
-                let data = b"li42ei43ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[42,43]".to_string());
+                assert_eq!(to_json(b"li42ei43ee"), "[42,43]".to_string());
             }
 
             #[test]
             fn two_utf8_strings() {
-                // List with two UTF8 strings: l5:alice3:bobe
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13  14 (pos)
-                //   l   5   :   a   l   i   c   e   3   :   b   o   b   e (byte)
-                // 108  53  58  97 108 105  99 101  51  58  98 111  98 101 (byte decimal)
-
-                let data = b"l5:alice3:bobe";
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"alice\",\"bob\"]".to_string());
+                assert_eq!(
+                    to_json(b"l5:alice3:bobe"),
+                    "[\"alice\",\"bob\"]".to_string()
+                );
             }
 
             #[test]
             fn two_non_utf8_strings() {
-                // List with two UTF8 strings: l2:\xFF\xFE2:\xFD\xFCe
-                //   1   2   3   4   5   6   7   8   9  10 (pos)
-                //   l   2   : xFF xFE   2   : xFD xFC   e (byte)
-                // 108  53  58 255 254 105  99 253 252 101 (byte decimal)
-
-                let data = b"l2:\xFF\xFE2:\xFD\xFCe";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
                 assert_eq!(
-                    parser.json,
+                    to_json(b"l2:\xFF\xFE2:\xFD\xFCe"),
                     "[\"<hex>fffe</hex>\",\"<hex>fdfc</hex>\"]".to_string()
                 );
             }
         }
 
         mod with_two_items_of_different_types {
-            use crate::BencodeParser;
+            use crate::tests::to_json;
 
             #[test]
             fn integer_and_utf8_string() {
-                // List with an integer and a UTF-8 string: li42e5:alicee
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
-                //   l   i   4   2   e   5   :   a   l   i   c   e   e (byte)
-                // 108 105  52  50 101  53  58  97 108 105  99 101 101 (byte decimal)
-
-                let data = b"li42e5:alicee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[42,\"alice\"]".to_string());
+                assert_eq!(to_json(b"li42e5:alicee"), "[42,\"alice\"]".to_string());
             }
 
             #[test]
             fn integer_and_non_utf8_string() {
-                // List with an integer a non UTF-8 string: li42e2:\xFF\xFEe
-                //   1   2   3   4   5   6   7   8   9  10 (pos)
-                //   l   i   4   2   e   2   : xFF xFE   e (byte)
-                // 108 105  52  50 101  50  58 255 254 105 (byte decimal)
-
-                let data = b"li42e2:\xFF\xFEe";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[42,\"<hex>fffe</hex>\"]".to_string());
+                assert_eq!(
+                    to_json(b"li42e2:\xFF\xFEe"),
+                    "[42,\"<hex>fffe</hex>\"]".to_string()
+                );
             }
 
             #[test]
             fn utf8_string_and_integer() {
-                // List with a UTF-8 string and an integer: l5:alicei42ee
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13 (pos)
-                //   l   5   :   a   l   i   c   e   i   4   2   e   e (byte)
-                // 108  53  58  97 108 105  99 101 105  52  50 101 101 101 (byte decimal)
-
-                let data = b"l5:alicei42ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"alice\",42]".to_string());
+                assert_eq!(to_json(b"l5:alicei42ee"), "[\"alice\",42]".to_string());
             }
 
             #[test]
             fn non_utf8_string_and_an_integer() {
-                // List with a non UTF-8 string and an integer: l2:\xFF\xFEi42ee
-                //   1   2   3   4   5   6   7   8   9  10 (pos)
-                //   l   2   : xFF xFE   i   4   2   e  e (byte)
-                // 108  50  58 255 254 105  52  50 101105 (byte decimal)
-
-                let data = b"l2:\xFF\xFEi42ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "[\"<hex>fffe</hex>\",42]".to_string());
+                assert_eq!(
+                    to_json(b"l2:\xFF\xFEi42ee"),
+                    "[\"<hex>fffe</hex>\",42]".to_string()
+                );
             }
 
             mod integer_and_list {
-                use crate::BencodeParser;
+                use crate::tests::to_json;
 
                 #[test]
                 fn second_item_empty_list() {
-                    let data = b"li42elee";
-
-                    let mut parser = BencodeParser::new(&data[..]);
-                    parser.parse().unwrap();
-
-                    assert_eq!(parser.json, "[42,[]]".to_string());
+                    assert_eq!(to_json(b"li42elee"), "[42,[]]".to_string());
                 }
             }
 
@@ -729,7 +582,7 @@ mod tests {
     }
 
     mod dictionary {
-        use crate::BencodeParser;
+        use crate::tests::to_json;
 
         // Note: Keys must be bencoded strings.
 
@@ -750,80 +603,46 @@ mod tests {
 
         #[test]
         fn empty_dictionary() {
-            let data = b"de";
-
-            let mut parser = BencodeParser::new(&data[..]);
-            parser.parse().unwrap();
-
-            assert_eq!(parser.json, "{}".to_string());
+            assert_eq!(to_json(b"de"), "{}".to_string());
         }
 
         mod with_one_key_of_type {
-            use crate::BencodeParser;
+            use crate::tests::to_json;
 
             #[test]
             fn integer() {
-                let data = b"d3:fooi42ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "{\"foo\":42}".to_string());
+                assert_eq!(to_json(b"d3:fooi42ee"), "{\"foo\":42}".to_string());
             }
 
             #[test]
             fn utf8_string() {
-                let data = b"d3:bar4:spame";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "{\"bar\":\"spam\"}".to_string());
+                assert_eq!(to_json(b"d3:bar4:spame"), "{\"bar\":\"spam\"}".to_string());
             }
 
             #[test]
             fn non_utf8_string() {
-                let data = b"d3:bar2:\xFF\xFEe";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "{\"bar\":\"<hex>fffe</hex>\"}".to_string());
+                assert_eq!(
+                    to_json(b"d3:bar2:\xFF\xFEe"),
+                    "{\"bar\":\"<hex>fffe</hex>\"}".to_string()
+                );
             }
         }
 
         mod with_two_keys_of_the_same_type {
-            use crate::BencodeParser;
+            use crate::tests::to_json;
 
             #[test]
             fn two_integers() {
-                // Dictionary with two integers: d3:bari42e3:fooi43ee
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20 (pos)
-                //   d   3   :   b   a   r   i   4   2   e   3   :   f   o   o   i   4   3   e   e (byte)
-                // 100  51  58  98  97 114 105  52  50 101  51  58 102 111 111 105  52  51 101 101 (byte decimal)
-
-                let data = b"d3:bari42e3:fooi43ee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
-                assert_eq!(parser.json, "{\"bar\":42,\"foo\":43}".to_string());
+                assert_eq!(
+                    to_json(b"d3:bari42e3:fooi43ee"),
+                    "{\"bar\":42,\"foo\":43}".to_string()
+                );
             }
 
             #[test]
             fn two_utf8_strings() {
-                // Dictionary with two UTF-8 strings: d3:bar4:spam3:foo5:alicee
-                //   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25 (pos)
-                //   d   3   :   b   a   r   4   :   s   p   a   m   3   :   f   o   o   5   :   a   l   i   c   e   e (byte)
-                // 100  51  58  98  97 114  52  58 115 112  97 109  51  58 102 111 111  53  58  97 108 105  99 101 101 (byte decimal)
-
-                let data = b"d3:bar4:spam3:foo5:alicee";
-
-                let mut parser = BencodeParser::new(&data[..]);
-                parser.parse().unwrap();
-
                 assert_eq!(
-                    parser.json,
+                    to_json(b"d3:bar4:spam3:foo5:alicee"),
                     "{\"bar\":\"spam\",\"foo\":\"alice\"}".to_string()
                 );
             }
