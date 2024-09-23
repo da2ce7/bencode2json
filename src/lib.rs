@@ -405,11 +405,10 @@ mod tests {
     mod strings {
         use crate::tests::to_json;
 
-        /* todo:
-        - String with size 0 (empty string) are allowed: b"0:"
-        - String ending with reserved charts 'i', 'l', 'd', 'l', ':', 'e'
-        - String ending with digit
-        */
+        #[test]
+        fn empty_string() {
+            assert_eq!(to_json(b"0:"), r#""""#.to_string());
+        }
 
         #[test]
         fn utf8() {
@@ -424,9 +423,37 @@ mod tests {
             );
         }
 
+        #[test]
+        fn ending_with_bencode_end_char() {
+            assert_eq!(to_json(b"1:e"), r#""e""#.to_string());
+        }
+
+        #[test]
+        fn containing_a_reserved_char() {
+            assert_eq!(to_json(b"1:i"), r#""i""#.to_string());
+            assert_eq!(to_json(b"1:l"), r#""l""#.to_string());
+            assert_eq!(to_json(b"1:d"), r#""d""#.to_string());
+            assert_eq!(to_json(b"1:l"), r#""l""#.to_string());
+            assert_eq!(to_json(b"1:e"), r#""e""#.to_string());
+        }
+
+        #[test]
+        fn containing_a_digit() {
+            assert_eq!(to_json(b"1:0"), r#""0""#.to_string());
+            assert_eq!(to_json(b"1:1"), r#""1""#.to_string());
+            assert_eq!(to_json(b"1:2"), r#""2""#.to_string());
+            assert_eq!(to_json(b"1:3"), r#""3""#.to_string());
+            assert_eq!(to_json(b"1:4"), r#""4""#.to_string());
+            assert_eq!(to_json(b"1:5"), r#""5""#.to_string());
+            assert_eq!(to_json(b"1:6"), r#""6""#.to_string());
+            assert_eq!(to_json(b"1:7"), r#""7""#.to_string());
+            assert_eq!(to_json(b"1:8"), r#""8""#.to_string());
+            assert_eq!(to_json(b"1:9"), r#""9""#.to_string());
+        }
+
         /* todo:
-           - String containing special chars: 'i', ':', 'l', 'd', 'e'. The
-             bencoded string can contain reserved chars in bencode format.
+           - String containing special chars like : `"`, `\`, '\\'
+           - String containing JSON
         */
     }
 
@@ -585,13 +612,6 @@ mod tests {
 
         /* todo:
 
-           Valid cases:
-
-           - A key starting with a digit.
-           - A key with non UTF-8 value:
-                Bencode: d2:\xFF\xFEi42ee
-                JSON:    {"<hex>fffe</hex>": 42}
-
            Error cases:
 
            - A dictionary key can't be an integer.
@@ -601,6 +621,23 @@ mod tests {
         #[test]
         fn empty_dictionary() {
             assert_eq!(to_json(b"de"), "{}".to_string());
+        }
+
+        mod with_one_key {
+            use crate::tests::to_json;
+
+            #[test]
+            fn with_a_key_starting_with_a_digit() {
+                assert_eq!(to_json(b"d4:1fooi42ee"), r#"{"1foo":42}"#.to_string());
+            }
+
+            #[test]
+            fn with_a_key_with_a_non_urf_string() {
+                assert_eq!(
+                    to_json(b"d2:\xFF\xFEi42ee"),
+                    r#"{"<hex>fffe</hex>":42}"#.to_string()
+                );
+            }
         }
 
         mod with_one_key_of_type {

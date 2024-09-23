@@ -40,6 +40,11 @@ printf "d3:bar2:\xFF\xFEe" | cargo run
 {"bar":"<hex>fffe</hex>"}
 ```
 
+```console
+printf "d2:\xFF\xFE3:bare" | cargo run
+{"<hex>fffe</hex>":"bar"}
+```
+
 > NOTICE: We need two escape the two bytes `FF` and `FE` with `\x` inside the string.
 
 ## Test
