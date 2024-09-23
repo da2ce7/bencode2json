@@ -119,11 +119,7 @@ impl<R: Read> BencodeParser<R> {
     /// # Panics
     ///
     /// Will panic if ...
-    #[allow(clippy::match_on_vec_items)]
     #[allow(clippy::single_match)]
-    #[allow(clippy::too_many_lines)]
-    #[allow(clippy::match_same_arms)]
-    #[allow(clippy::single_match_else)]
     pub fn parse(&mut self) -> io::Result<()> {
         loop {
             let byte = match self.read_byte() {
