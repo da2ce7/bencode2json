@@ -3,10 +3,12 @@ use std::str::{self};
 
 use byte_reader::ByteReader;
 use byte_writer::ByteWriter;
+use parsers::integer;
 use stack::{Stack, State};
 
 pub mod byte_reader;
 pub mod byte_writer;
+pub mod parsers;
 pub mod stack;
 
 pub struct BencodeParser<R: Read, W: Write> {
@@ -257,39 +259,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     }
 
     fn parse_integer(&mut self) -> io::Result<()> {
-        /*
-        st = 0 -> Parsed begin integer (`i`)
-        st = 1 -> Parsed sign (only negative is allowed)
-        st = 2 -> Parsing digits
-        st = 3 -> Parsed end integer (`e`)
-        */
-
-        let mut st = 0;
-
-        loop {
-            let byte = match self.byte_reader.read_byte() {
-                Ok(byte) => byte,
-                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                    //println!("Reached the end of file.");
-                    panic!("unexpected end of input parsing integer");
-                }
-                Err(err) => return Err(err),
-            };
-
-            let char = byte as char;
-
-            if char.is_ascii_digit() {
-                st = 2;
-                self.byte_writer.write_byte(byte)?;
-            } else if char == 'e' && st == 2 {
-                return Ok(());
-            } else if char == '-' && st == 0 {
-                st = 1;
-                self.byte_writer.write_byte(byte)?;
-            } else {
-                panic!("invalid integer");
-            }
-        }
+        integer::parse(&mut self.byte_reader, &mut self.byte_writer)
     }
 
     fn parse_string(&mut self, byte: u8) -> io::Result<()> {
