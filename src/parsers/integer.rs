@@ -2,11 +2,13 @@ use std::io::{self, Read, Write};
 
 use crate::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
+/// The current state parsing the integer.
 #[derive(PartialEq)]
-enum ExpectingDigit {
-    OrSign,    // 0
-    AfterSign, // 1
-    OrEnd,     // 2
+#[allow(clippy::enum_variant_names)]
+enum StateExpecting {
+    DigitOrSign,    // 0
+    DigitAfterSign, // 1
+    DigitOrEnd,     // 2
 }
 
 /// It parses an integer bencoded value.
@@ -18,13 +20,13 @@ enum ExpectingDigit {
 ///
 /// # Panics
 ///
-/// Will panic if we reach the end of the input without completing the
-/// integer (without reaching the end of the integer `e`).
+/// Will panic if we reach the end of the input without completing the integer
+/// (without reaching the end of the integer `e`).
 pub fn parse<R: Read, W: Write>(
     reader: &mut ByteReader<R>,
     writer: &mut ByteWriter<W>,
 ) -> io::Result<()> {
-    let mut state = ExpectingDigit::OrSign;
+    let mut state = StateExpecting::DigitOrSign;
 
     loop {
         let byte = match reader.read_byte() {
@@ -38,12 +40,12 @@ pub fn parse<R: Read, W: Write>(
         let char = byte as char;
 
         if char.is_ascii_digit() {
-            state = ExpectingDigit::OrEnd;
+            state = StateExpecting::DigitOrEnd;
             writer.write_byte(byte)?;
-        } else if char == 'e' && state == ExpectingDigit::OrEnd {
+        } else if char == 'e' && state == StateExpecting::DigitOrEnd {
             return Ok(());
-        } else if char == '-' && state == ExpectingDigit::OrSign {
-            state = ExpectingDigit::AfterSign;
+        } else if char == '-' && state == StateExpecting::DigitOrSign {
+            state = StateExpecting::DigitAfterSign;
             writer.write_byte(byte)?;
         } else {
             panic!("invalid integer");
