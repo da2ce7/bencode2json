@@ -152,13 +152,13 @@ impl<R: Read> BencodeParser<R> {
                     // Begin of list
                     self.begin_bencoded_value();
                     self.json.push('[');
-                    self.stack.push(State::L);
+                    self.stack.push(State::ExpectingFirstItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
                     self.begin_bencoded_value();
                     self.json.push('{');
-                    self.stack.push(State::D);
+                    self.stack.push(State::ExpectingFirstFieldOrEnd);
                 }
                 b'e' => {
                     // End of list or dictionary (not end of integer)
@@ -170,7 +170,7 @@ impl<R: Read> BencodeParser<R> {
             }
 
             if self.debug {
-                println!("stack: {:?}", self.stack);
+                println!("stack: {}", self.stack);
                 //println!("string_parser: {:#?}", self.string_parser);
                 match &self.captured_input {
                     Some(captured_input) => match str::from_utf8(captured_input) {
@@ -197,22 +197,25 @@ impl<R: Read> BencodeParser<R> {
     /// is received.
     pub fn begin_bencoded_value(&mut self) {
         match self.stack.peek() {
-            State::D => {
-                self.stack.swap_top(State::E);
-            }
-            State::E => {
-                self.json.push(':');
-                self.stack.swap_top(State::F);
-            }
-            State::F => {
-                self.json.push(',');
-                self.stack.swap_top(State::E);
-            }
-            State::L => {
-                self.stack.swap_top(State::M);
-            }
-            State::M => self.json.push(','),
+            // Initial state
             State::Initial => {}
+            // List
+            State::ExpectingFirstItemOrEnd => {
+                self.stack.swap_top(State::ExpectingNextItem);
+            }
+            State::ExpectingNextItem => self.json.push(','), // Items separator
+            // Dictionary
+            State::ExpectingFirstFieldOrEnd => {
+                self.stack.swap_top(State::ExpectingFieldValue);
+            }
+            State::ExpectingFieldValue => {
+                self.json.push(':'); // Key/Value separator
+                self.stack.swap_top(State::ExpectingFieldKey);
+            }
+            State::ExpectingFieldKey => {
+                self.json.push(','); // Field separator
+                self.stack.swap_top(State::ExpectingFieldValue);
+            }
         }
     }
 
@@ -226,14 +229,14 @@ impl<R: Read> BencodeParser<R> {
     /// Will panic
     pub fn end_bencoded_value(&mut self) {
         match self.stack.peek() {
-            State::L | State::M => {
+            State::ExpectingFirstItemOrEnd | State::ExpectingNextItem => {
                 self.json.push(']');
                 self.stack.pop();
             }
-            State::D | State::F => {
+            State::ExpectingFirstFieldOrEnd | State::ExpectingFieldKey => {
                 self.json.push('}');
             }
-            State::E | State::Initial => {
+            State::ExpectingFieldValue | State::Initial => {
                 // todo: pass the type of value (list or dict) to customize the error message
                 panic!("error parsing end of list or dictionary, unexpected initial state on the stack")
             }

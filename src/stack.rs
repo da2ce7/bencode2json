@@ -3,35 +3,72 @@
 
 // code-review: should we use a fixed array to avoid heap fragmentation?
 
+use std::fmt::Display;
+
 #[derive(Debug)]
 pub struct Stack {
     items: Vec<State>,
 }
 
-// todo: rename states
-
 /// States while parsing list or dictionaries.
 ///
 /// There are no states for integers and strings because it's a straightforward
 /// operation. We know when they finish and there is no recursion.
+///
+/// States are displayed with a short name using only one letter:
+///
+/// I, L, M, D, E, F
+///
+/// This comes from the original implementation.
 #[derive(Debug, PartialEq, Clone)]
 pub enum State {
-    Initial,
+    Initial, // I
 
     // States while parsing lists
-    L,
-    M,
+    ExpectingFirstItemOrEnd, // L
+    ExpectingNextItem,       // M
 
     // States while parsing dictionaries
-    D,
-    E,
-    F,
+    ExpectingFirstFieldOrEnd, // D
+    ExpectingFieldValue,      // E
+    ExpectingFieldKey,        // F
+}
+
+impl Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let output = match self {
+            State::Initial => "I",
+            State::ExpectingFirstItemOrEnd => "L",
+            State::ExpectingNextItem => "M",
+            State::ExpectingFirstFieldOrEnd => "D",
+            State::ExpectingFieldValue => "E",
+            State::ExpectingFieldKey => "F",
+        };
+        write!(f, "{output}")
+    }
 }
 
 impl Default for Stack {
     fn default() -> Self {
         let items = vec![State::Initial];
         Self { items }
+    }
+}
+
+impl Display for Stack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for (idx, item) in <std::vec::Vec<State> as Clone>::clone(&self.items)
+            .into_iter()
+            .enumerate()
+        {
+            if idx > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{item}")?;
+        }
+        write!(f, "]")?;
+        Ok(())
     }
 }
 
