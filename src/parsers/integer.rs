@@ -2,6 +2,13 @@ use std::io::{self, Read, Write};
 
 use crate::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
+#[derive(PartialEq)]
+enum ExpectingDigit {
+    OrSign,    // 0
+    AfterSign, // 1
+    OrEnd,     // 2
+}
+
 /// It parses an integer bencoded value.
 ///
 /// # Errors
@@ -17,14 +24,7 @@ pub fn parse<R: Read, W: Write>(
     reader: &mut ByteReader<R>,
     writer: &mut ByteWriter<W>,
 ) -> io::Result<()> {
-    /*
-    st = 0 -> Parsed begin integer (`i`)
-    st = 1 -> Parsed sign (only negative is allowed)
-    st = 2 -> Parsing digits
-    st = 3 -> Parsed end integer (`e`)
-    */
-
-    let mut st = 0;
+    let mut state = ExpectingDigit::OrSign;
 
     loop {
         let byte = match reader.read_byte() {
@@ -38,12 +38,12 @@ pub fn parse<R: Read, W: Write>(
         let char = byte as char;
 
         if char.is_ascii_digit() {
-            st = 2;
+            state = ExpectingDigit::OrEnd;
             writer.write_byte(byte)?;
-        } else if char == 'e' && st == 2 {
+        } else if char == 'e' && state == ExpectingDigit::OrEnd {
             return Ok(());
-        } else if char == '-' && st == 0 {
-            st = 1;
+        } else if char == '-' && state == ExpectingDigit::OrSign {
+            state = ExpectingDigit::AfterSign;
             writer.write_byte(byte)?;
         } else {
             panic!("invalid integer");
