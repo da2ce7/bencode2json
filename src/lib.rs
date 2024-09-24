@@ -1,17 +1,17 @@
 use std::io::{self, Read, Write};
 use std::str::{self};
 
+use byte_reader::ByteReader;
 use stack::{Stack, State};
 
+pub mod byte_reader;
 pub mod stack;
 
 pub struct BencodeParser<R: Read, W: Write> {
     pub debug: bool,
     pub iter: u64,
 
-    reader: R,
-    input_byte_counter: u64,
-    opt_captured_input: Option<Vec<u8>>,
+    byte_reader: ByteReader<R>,
 
     writer: W,
     output_byte_counter: u64,
@@ -108,9 +108,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             debug: false, // todo: use tracing crate
             iter: 1,
 
-            reader,
-            input_byte_counter: 0,
-            opt_captured_input: Some(Vec::new()),
+            byte_reader: ByteReader::new(reader),
 
             writer,
             output_byte_counter: 0,
@@ -132,7 +130,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     #[allow(clippy::single_match)]
     pub fn parse(&mut self) -> io::Result<()> {
         loop {
-            let byte = match self.read_byte() {
+            let byte = match self.byte_reader.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
@@ -143,7 +141,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
             if self.debug {
                 println!("iter: {}", self.iter);
-                println!("pos: {}", self.input_byte_counter);
+                println!("pos: {}", self.byte_reader.input_byte_counter);
                 println!("byte: {} ({})", byte, byte as char);
             }
 
@@ -182,7 +180,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             if self.debug {
                 println!("stack: {}", self.stack);
                 //println!("string_parser: {:#?}", self.string_parser);
-                match &self.opt_captured_input {
+                match &self.byte_reader.opt_captured_input {
                     Some(input) => match str::from_utf8(input) {
                         Ok(string) => println!("input: {string}"),
                         Err(_) => println!("input: {input:#?}"),
@@ -279,7 +277,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         let mut st = 0;
 
         loop {
-            let byte = match self.read_byte() {
+            let byte = match self.byte_reader.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
@@ -312,7 +310,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         // Parse length
 
         loop {
-            let byte = match self.read_byte() {
+            let byte = match self.byte_reader.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
@@ -336,7 +334,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         // Parse value
 
         for _i in 1..=string_parser.string_length {
-            let byte = match self.read_byte() {
+            let byte = match self.byte_reader.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
@@ -355,23 +353,6 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         //println!("string_parser {string_parser:#?}");
 
         Ok(())
-    }
-
-    /// It reads one byt from the input (stdin or file).
-    fn read_byte(&mut self) -> io::Result<u8> {
-        let mut byte = [0; 1];
-
-        self.reader.read_exact(&mut byte)?;
-
-        self.input_byte_counter += 1;
-
-        let byte = byte[0];
-
-        if let Some(ref mut captured_input) = self.opt_captured_input {
-            captured_input.push(byte);
-        }
-
-        Ok(byte)
     }
 
     /// It writes one byte to the output (stdout or file).
