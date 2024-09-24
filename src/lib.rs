@@ -268,6 +268,13 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     }
 
     fn parse_integer(&mut self) -> io::Result<()> {
+        /*
+        st = 0 -> Parsed begin integer (`i`)
+        st = 1 -> Parsed sign (only negative is allowed)
+        st = 2 -> Parsing digits
+        st = 3 -> Parsed end integer (`e`)
+        */
+
         let mut st = 0;
 
         loop {
