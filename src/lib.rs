@@ -2,21 +2,18 @@ use std::io::{self, Read, Write};
 use std::str::{self};
 
 use byte_reader::ByteReader;
+use byte_writer::ByteWriter;
 use stack::{Stack, State};
 
 pub mod byte_reader;
+pub mod byte_writer;
 pub mod stack;
 
 pub struct BencodeParser<R: Read, W: Write> {
     pub debug: bool,
     pub iter: u64,
-
     byte_reader: ByteReader<R>,
-
-    writer: W,
-    output_byte_counter: u64,
-    opt_captured_output: Option<String>,
-
+    byte_writer: ByteWriter<W>,
     stack: Stack,
 }
 
@@ -107,13 +104,8 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         BencodeParser {
             debug: false, // todo: use tracing crate
             iter: 1,
-
             byte_reader: ByteReader::new(reader),
-
-            writer,
-            output_byte_counter: 0,
-            opt_captured_output: Some(String::new()),
-
+            byte_writer: ByteWriter::new(writer),
             stack: Stack::default(),
         }
     }
@@ -159,13 +151,13 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'l' => {
                     // Begin of list
                     self.begin_bencoded_value()?;
-                    self.write_byte(b'[')?;
+                    self.byte_writer.write_byte(b'[')?;
                     self.stack.push(State::ExpectingFirstItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
                     self.begin_bencoded_value()?;
-                    self.write_byte(b'{')?;
+                    self.byte_writer.write_byte(b'{')?;
                     self.stack.push(State::ExpectingFirstFieldOrEnd);
                 }
                 b'e' => {
@@ -181,10 +173,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 println!("stack: {}", self.stack);
                 //println!("string_parser: {:#?}", self.string_parser);
                 self.byte_reader.print_captured_input();
-                match &self.opt_captured_output {
-                    Some(output) => println!("output: {output}"),
-                    None => {}
-                }
+                self.byte_writer.print_captured_output();
                 println!();
             }
 
@@ -214,7 +203,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             }
             State::ExpectingNextItem => {
                 // Items separator
-                self.write_byte(b',')?;
+                self.byte_writer.write_byte(b',')?;
             }
             // Dictionary
             State::ExpectingFirstFieldOrEnd => {
@@ -222,12 +211,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             }
             State::ExpectingFieldValue => {
                 // Key/Value separator
-                self.write_byte(b':')?;
+                self.byte_writer.write_byte(b':')?;
                 self.stack.swap_top(State::ExpectingFieldKey);
             }
             State::ExpectingFieldKey => {
                 // Field separator
-                self.write_byte(b',')?;
+                self.byte_writer.write_byte(b',')?;
                 self.stack.swap_top(State::ExpectingFieldValue);
             }
         }
@@ -251,11 +240,11 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     pub fn end_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
             State::ExpectingFirstItemOrEnd | State::ExpectingNextItem => {
-                self.write_byte(b']')?;
+                self.byte_writer.write_byte(b']')?;
                 self.stack.pop();
             }
             State::ExpectingFirstFieldOrEnd | State::ExpectingFieldKey => {
-                self.write_byte(b'}')?;
+                self.byte_writer.write_byte(b'}')?;
             }
             State::ExpectingFieldValue | State::Initial => {
                 // todo: pass the type of value (list or dict) to customize the error message
@@ -291,12 +280,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
             if char.is_ascii_digit() {
                 st = 2;
-                self.write_byte(byte)?;
+                self.byte_writer.write_byte(byte)?;
             } else if char == 'e' && st == 2 {
                 return Ok(());
             } else if char == '-' && st == 0 {
                 st = 1;
-                self.write_byte(byte)?;
+                self.byte_writer.write_byte(byte)?;
             } else {
                 panic!("invalid integer");
             }
@@ -349,39 +338,15 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             // todo: escape '"' and '\\' with '\\';
         }
 
-        self.write_str(&string_parser.json())?;
+        self.byte_writer.write_str(&string_parser.json())?;
 
         //println!("string_parser {string_parser:#?}");
 
         Ok(())
     }
 
-    /// It writes one byte to the output (stdout or file).
-    fn write_byte(&mut self, byte: u8) -> io::Result<()> {
-        let bytes = [byte];
-
-        self.writer.write_all(&bytes)?;
-
-        self.output_byte_counter += 1;
-
-        if let Some(ref mut captured_output) = self.opt_captured_output {
-            captured_output.push(byte as char);
-        }
-
-        Ok(())
-    }
-
-    /// It writes a string to the output (stdout or file).
-    fn write_str(&mut self, value: &str) -> io::Result<()> {
-        self.writer.write_all(value.as_bytes())?;
-
-        self.output_byte_counter += value.as_bytes().len() as u64;
-
-        if let Some(ref mut captured_output) = self.opt_captured_output {
-            captured_output.push_str(value);
-        }
-
-        Ok(())
+    pub fn opt_captured_output(&self) -> Option<String> {
+        self.byte_writer.opt_captured_output.clone()
     }
 }
 
@@ -396,7 +361,7 @@ mod tests {
         let mut parser = BencodeParser::new(bytes, Box::new(io::stdout()));
         parser.parse().expect("bencoded to JSON conversion failed");
 
-        match parser.opt_captured_output {
+        match parser.opt_captured_output() {
             Some(captured_output) => captured_output,
             None => panic!(
                 "capturing output is not enabled in parser, please enable it to run the tests"
