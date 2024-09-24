@@ -7,16 +7,15 @@ pub mod stack;
 
 pub struct BencodeParser<R: Read, W: Write> {
     pub debug: bool,
-    pub json: String,
     pub iter: u64,
 
     reader: R,
     input_byte_counter: u64,
-    captured_input: Option<Vec<u8>>,
+    opt_captured_input: Option<Vec<u8>>,
 
     writer: W,
     output_byte_counter: u64,
-    captured_output: Option<String>,
+    opt_captured_output: Option<String>,
 
     stack: Stack,
 }
@@ -107,16 +106,15 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     pub fn new(reader: R, writer: W) -> Self {
         BencodeParser {
             debug: false, // todo: use tracing crate
-            json: String::new(),
             iter: 1,
 
             reader,
             input_byte_counter: 0,
-            captured_input: Some(Vec::new()),
+            opt_captured_input: Some(Vec::new()),
 
             writer,
             output_byte_counter: 0,
-            captured_output: Some(String::new()),
+            opt_captured_output: Some(String::new()),
 
             stack: Stack::default(),
         }
@@ -163,14 +161,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'l' => {
                     // Begin of list
                     self.begin_bencoded_value()?;
-                    self.json.push('[');
                     self.write_byte(b'[')?;
                     self.stack.push(State::ExpectingFirstItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
                     self.begin_bencoded_value()?;
-                    self.json.push('{');
                     self.write_byte(b'{')?;
                     self.stack.push(State::ExpectingFirstFieldOrEnd);
                 }
@@ -186,14 +182,17 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             if self.debug {
                 println!("stack: {}", self.stack);
                 //println!("string_parser: {:#?}", self.string_parser);
-                match &self.captured_input {
-                    Some(captured_input) => match str::from_utf8(captured_input) {
+                match &self.opt_captured_input {
+                    Some(input) => match str::from_utf8(input) {
                         Ok(string) => println!("input: {string}"),
-                        Err(_) => println!("input: {captured_input:#?}"),
+                        Err(_) => println!("input: {input:#?}"),
                     },
                     None => {}
                 }
-                println!("output: {}", self.json);
+                match &self.opt_captured_output {
+                    Some(output) => println!("output: {output}"),
+                    None => {}
+                }
                 println!();
             }
 
@@ -223,7 +222,6 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             }
             State::ExpectingNextItem => {
                 // Items separator
-                self.json.push(',');
                 self.write_byte(b',')?;
             }
             // Dictionary
@@ -231,12 +229,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 self.stack.swap_top(State::ExpectingFieldValue);
             }
             State::ExpectingFieldValue => {
-                self.json.push(':'); // Key/Value separator
+                // Key/Value separator
                 self.write_byte(b':')?;
                 self.stack.swap_top(State::ExpectingFieldKey);
             }
             State::ExpectingFieldKey => {
-                self.json.push(','); // Field separator
+                // Field separator
                 self.write_byte(b',')?;
                 self.stack.swap_top(State::ExpectingFieldValue);
             }
@@ -261,12 +259,10 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     pub fn end_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
             State::ExpectingFirstItemOrEnd | State::ExpectingNextItem => {
-                self.json.push(']');
                 self.write_byte(b']')?;
                 self.stack.pop();
             }
             State::ExpectingFirstFieldOrEnd | State::ExpectingFieldKey => {
-                self.json.push('}');
                 self.write_byte(b'}')?;
             }
             State::ExpectingFieldValue | State::Initial => {
@@ -296,14 +292,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
             if char.is_ascii_digit() {
                 st = 2;
-                self.json.push(char);
                 self.write_byte(byte)?;
             } else if char == 'e' && st == 2 {
                 return Ok(());
             } else if char == '-' && st == 0 {
                 st = 1;
-                self.json.push(char);
-                self.write_byte(b'}')?;
+                self.write_byte(byte)?;
             } else {
                 panic!("invalid integer");
             }
@@ -356,7 +350,6 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             // todo: escape '"' and '\\' with '\\';
         }
 
-        self.json.push_str(&string_parser.json());
         self.write_str(&string_parser.json())?;
 
         //println!("string_parser {string_parser:#?}");
@@ -374,7 +367,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
         let byte = byte[0];
 
-        if let Some(ref mut captured_input) = self.captured_input {
+        if let Some(ref mut captured_input) = self.opt_captured_input {
             captured_input.push(byte);
         }
 
@@ -389,7 +382,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
         self.output_byte_counter += 1;
 
-        if let Some(ref mut captured_output) = self.captured_output {
+        if let Some(ref mut captured_output) = self.opt_captured_output {
             captured_output.push(byte as char);
         }
 
@@ -402,7 +395,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
         self.output_byte_counter += value.as_bytes().len() as u64;
 
-        if let Some(ref mut captured_output) = self.captured_output {
+        if let Some(ref mut captured_output) = self.opt_captured_output {
             captured_output.push_str(value);
         }
 
@@ -420,7 +413,13 @@ mod tests {
     fn to_json(bytes: &[u8]) -> String {
         let mut parser = BencodeParser::new(bytes, Box::new(io::stdout()));
         parser.parse().expect("bencoded to JSON conversion failed");
-        parser.json
+
+        match parser.opt_captured_output {
+            Some(captured_output) => captured_output,
+            None => panic!(
+                "capturing output is not enabled in parser, please enable it to run the tests"
+            ),
+        }
     }
 
     mod integers {
