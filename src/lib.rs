@@ -9,12 +9,16 @@ pub struct BencodeParser<R: Read, W: Write> {
     pub debug: bool,
     pub json: String,
     pub iter: u64,
-    pub pos: u64,
+
     reader: R,
-    writer: W,
-    stack: Stack,
+    input_byte_counter: u64,
     captured_input: Option<Vec<u8>>,
+
+    writer: W,
+    output_byte_counter: u64,
     captured_output: Option<String>,
+
+    stack: Stack,
 }
 
 // todo: we don't have an integer parser because we simple print all bytes between
@@ -103,14 +107,18 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     pub fn new(reader: R, writer: W) -> Self {
         BencodeParser {
             debug: false, // todo: use tracing crate
-            reader,
-            writer,
-            stack: Stack::default(),
             json: String::new(),
-            pos: 0,
             iter: 1,
+
+            reader,
+            input_byte_counter: 0,
             captured_input: Some(Vec::new()),
+
+            writer,
+            output_byte_counter: 0,
             captured_output: Some(String::new()),
+
+            stack: Stack::default(),
         }
     }
 
@@ -137,7 +145,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
             if self.debug {
                 println!("iter: {}", self.iter);
-                println!("pos: {}", self.pos);
+                println!("pos: {}", self.input_byte_counter);
                 println!("byte: {} ({})", byte, byte as char);
             }
 
@@ -356,12 +364,13 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         Ok(())
     }
 
+    /// It reads one byt from the input (stdin or file).
     fn read_byte(&mut self) -> io::Result<u8> {
         let mut byte = [0; 1];
 
         self.reader.read_exact(&mut byte)?;
 
-        self.pos += 1;
+        self.input_byte_counter += 1;
 
         let byte = byte[0];
 
@@ -372,10 +381,13 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         Ok(byte)
     }
 
+    /// It writes one byte to the output (stdout or file).
     fn write_byte(&mut self, byte: u8) -> io::Result<()> {
         let bytes = [byte];
 
         self.writer.write_all(&bytes)?;
+
+        self.output_byte_counter += 1;
 
         if let Some(ref mut captured_output) = self.captured_output {
             captured_output.push(byte as char);
@@ -384,8 +396,11 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         Ok(())
     }
 
+    /// It writes a string to the output (stdout or file).
     fn write_str(&mut self, value: &str) -> io::Result<()> {
         self.writer.write_all(value.as_bytes())?;
+
+        self.output_byte_counter += value.as_bytes().len() as u64;
 
         if let Some(ref mut captured_output) = self.captured_output {
             captured_output.push_str(value);
