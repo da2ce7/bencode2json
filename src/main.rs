@@ -42,8 +42,5 @@ fn main() -> io::Result<()> {
 
     parser.parse()?;
 
-    // Write the JSON value to the output
-    //writeln!(output, "{}", parser.json)?;
-
     Ok(())
 }
