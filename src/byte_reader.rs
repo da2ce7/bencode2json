@@ -1,3 +1,4 @@
+use core::str;
 use std::io::{self, Read};
 
 /// A reader that reads bytes from an input.
@@ -41,5 +42,19 @@ impl<R: Read> ByteReader<R> {
         }
 
         Ok(byte)
+    }
+
+    /// It prints the captured input is enabled.
+    ///
+    /// It will print a string it the captured input so far is a UTF-8 string,
+    /// the debug info otherwise.
+    pub fn print_captured_input(&self) {
+        match &self.opt_captured_input {
+            Some(input) => match str::from_utf8(input) {
+                Ok(string) => println!("input: {string}"),
+                Err(_) => println!("input: {input:#?}"),
+            },
+            None => {}
+        }
     }
 }

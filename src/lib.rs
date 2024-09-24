@@ -180,13 +180,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             if self.debug {
                 println!("stack: {}", self.stack);
                 //println!("string_parser: {:#?}", self.string_parser);
-                match &self.byte_reader.opt_captured_input {
-                    Some(input) => match str::from_utf8(input) {
-                        Ok(string) => println!("input: {string}"),
-                        Err(_) => println!("input: {input:#?}"),
-                    },
-                    None => {}
-                }
+                self.byte_reader.print_captured_input();
                 match &self.opt_captured_output {
                     Some(output) => println!("output: {output}"),
                     None => {}
