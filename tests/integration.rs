@@ -20,5 +20,5 @@ fn test_stdin_stdout() {
     cmd.write_stdin("4:spam")
         .assert()
         .success()
-        .stdout("\"spam\"\n");
+        .stdout(r#""spam""#);
 }

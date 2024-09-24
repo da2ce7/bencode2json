@@ -32,19 +32,18 @@ fn main() -> io::Result<()> {
     };
 
     // Handle output stream (file or stdout)
-    let mut output: Box<dyn Write> = if let Some(output_path) = matches.get_one::<String>("output")
-    {
+    let output: Box<dyn Write> = if let Some(output_path) = matches.get_one::<String>("output") {
         Box::new(File::create(output_path)?)
     } else {
         Box::new(io::stdout())
     };
 
-    let mut parser = BencodeParser::new(input);
+    let mut parser = BencodeParser::new(input, output);
 
     parser.parse()?;
 
     // Write the JSON value to the output
-    writeln!(output, "{}", parser.json)?;
+    //writeln!(output, "{}", parser.json)?;
 
     Ok(())
 }

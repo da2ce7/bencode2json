@@ -1,18 +1,20 @@
-use std::io::{self, Read};
-use std::str;
+use std::io::{self, Read, Write};
+use std::str::{self};
 
 use stack::{Stack, State};
 
 pub mod stack;
 
-pub struct BencodeParser<R: Read> {
+pub struct BencodeParser<R: Read, W: Write> {
     pub debug: bool,
     pub json: String,
     pub iter: u64,
     pub pos: u64,
     reader: R,
+    writer: W,
     stack: Stack,
     captured_input: Option<Vec<u8>>,
+    captured_output: Option<String>,
 }
 
 // todo: we don't have an integer parser because we simple print all bytes between
@@ -97,16 +99,18 @@ impl StringParser {
     }
 }
 
-impl<R: Read> BencodeParser<R> {
-    pub fn new(reader: R) -> Self {
+impl<R: Read, W: Write> BencodeParser<R, W> {
+    pub fn new(reader: R, writer: W) -> Self {
         BencodeParser {
             debug: false, // todo: use tracing crate
             reader,
+            writer,
             stack: Stack::default(),
             json: String::new(),
             pos: 0,
             iter: 1,
             captured_input: Some(Vec::new()),
+            captured_output: Some(String::new()),
         }
     }
 
@@ -140,29 +144,31 @@ impl<R: Read> BencodeParser<R> {
             match byte {
                 b'i' => {
                     // Begin of integer
-                    self.begin_bencoded_value();
+                    self.begin_bencoded_value()?;
                     self.parser_integer().expect("invalid integer");
                 }
                 b'0'..=b'9' => {
                     // Begin of string
-                    self.begin_bencoded_value();
+                    self.begin_bencoded_value()?;
                     self.parse_string(byte).expect("invalid string");
                 }
                 b'l' => {
                     // Begin of list
-                    self.begin_bencoded_value();
+                    self.begin_bencoded_value()?;
                     self.json.push('[');
+                    self.write_byte(b'[')?;
                     self.stack.push(State::ExpectingFirstItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
-                    self.begin_bencoded_value();
+                    self.begin_bencoded_value()?;
                     self.json.push('{');
+                    self.write_byte(b'{')?;
                     self.stack.push(State::ExpectingFirstFieldOrEnd);
                 }
                 b'e' => {
                     // End of list or dictionary (not end of integer)
-                    self.end_bencoded_value();
+                    self.end_bencoded_value()?;
                 }
                 _ => {
                     panic!("{}", format!("unexpected byte {} ({})", byte, byte as char));
@@ -195,7 +201,11 @@ impl<R: Read> BencodeParser<R> {
     ///
     /// Called when the first byt of a bencoded value (integer, string, list or dict)
     /// is received.
-    pub fn begin_bencoded_value(&mut self) {
+    ///
+    /// # Errors
+    ///
+    /// Will return an error if the writer can't write to the output.
+    pub fn begin_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
             // Initial state
             State::Initial => {}
@@ -203,20 +213,28 @@ impl<R: Read> BencodeParser<R> {
             State::ExpectingFirstItemOrEnd => {
                 self.stack.swap_top(State::ExpectingNextItem);
             }
-            State::ExpectingNextItem => self.json.push(','), // Items separator
+            State::ExpectingNextItem => {
+                // Items separator
+                self.json.push(',');
+                self.write_byte(b',')?;
+            }
             // Dictionary
             State::ExpectingFirstFieldOrEnd => {
                 self.stack.swap_top(State::ExpectingFieldValue);
             }
             State::ExpectingFieldValue => {
                 self.json.push(':'); // Key/Value separator
+                self.write_byte(b':')?;
                 self.stack.swap_top(State::ExpectingFieldKey);
             }
             State::ExpectingFieldKey => {
                 self.json.push(','); // Field separator
+                self.write_byte(b',')?;
                 self.stack.swap_top(State::ExpectingFieldValue);
             }
         }
+
+        Ok(())
     }
 
     /// It updates the stack state and prints the delimiters when needed.
@@ -224,17 +242,24 @@ impl<R: Read> BencodeParser<R> {
     /// Called when the end of list or dictionary byte is received. End of
     /// integers or strings are processed while parsing them.
     ///
+    /// # Errors
+    ///
+    /// Will return an error if the writer can't write to the output.
+    ///
     /// # Panics
     ///
-    /// Will panic
-    pub fn end_bencoded_value(&mut self) {
+    /// Will panic if the end of bencoded value (list or dictionary) was not
+    /// expected.
+    pub fn end_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
             State::ExpectingFirstItemOrEnd | State::ExpectingNextItem => {
                 self.json.push(']');
+                self.write_byte(b']')?;
                 self.stack.pop();
             }
             State::ExpectingFirstFieldOrEnd | State::ExpectingFieldKey => {
                 self.json.push('}');
+                self.write_byte(b'}')?;
             }
             State::ExpectingFieldValue | State::Initial => {
                 // todo: pass the type of value (list or dict) to customize the error message
@@ -242,6 +267,8 @@ impl<R: Read> BencodeParser<R> {
             }
         }
         // todo: sp < stack. What this conditions does in the C implementation?
+
+        Ok(())
     }
 
     fn parser_integer(&mut self) -> io::Result<()> {
@@ -262,11 +289,13 @@ impl<R: Read> BencodeParser<R> {
             if char.is_ascii_digit() {
                 st = 2;
                 self.json.push(char);
+                self.write_byte(byte)?;
             } else if char == 'e' && st == 2 {
                 return Ok(());
             } else if char == '-' && st == 0 {
                 st = 1;
                 self.json.push(char);
+                self.write_byte(b'}')?;
             } else {
                 panic!("invalid integer");
             }
@@ -320,6 +349,7 @@ impl<R: Read> BencodeParser<R> {
         }
 
         self.json.push_str(&string_parser.json());
+        self.write_str(&string_parser.json())?;
 
         //println!("string_parser {string_parser:#?}");
 
@@ -341,15 +371,39 @@ impl<R: Read> BencodeParser<R> {
 
         Ok(byte)
     }
+
+    fn write_byte(&mut self, byte: u8) -> io::Result<()> {
+        let bytes = [byte];
+
+        self.writer.write_all(&bytes)?;
+
+        if let Some(ref mut captured_output) = self.captured_output {
+            captured_output.push(byte as char);
+        }
+
+        Ok(())
+    }
+
+    fn write_str(&mut self, value: &str) -> io::Result<()> {
+        self.writer.write_all(value.as_bytes())?;
+
+        if let Some(ref mut captured_output) = self.captured_output {
+            captured_output.push_str(value);
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use std::io;
+
     use crate::BencodeParser;
 
     fn to_json(bytes: &[u8]) -> String {
-        let mut parser = BencodeParser::new(bytes);
+        let mut parser = BencodeParser::new(bytes, Box::new(io::stdout()));
         parser.parse().expect("bencoded to JSON conversion failed");
         parser.json
     }
