@@ -151,7 +151,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'i' => {
                     // Begin of integer
                     self.begin_bencoded_value()?;
-                    self.parser_integer().expect("invalid integer");
+                    self.parse_integer().expect("invalid integer");
                 }
                 b'0'..=b'9' => {
                     // Begin of string
@@ -275,7 +275,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         Ok(())
     }
 
-    fn parser_integer(&mut self) -> io::Result<()> {
+    fn parse_integer(&mut self) -> io::Result<()> {
         let mut st = 0;
 
         loop {
