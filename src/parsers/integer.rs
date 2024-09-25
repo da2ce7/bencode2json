@@ -5,6 +5,8 @@ use std::io::{self, Read, Write};
 
 use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
+// code-review: state machine to check state transitions (runtime or compile time)?
+
 /// The current state parsing the integer.
 #[derive(PartialEq)]
 #[allow(clippy::enum_variant_names)]
