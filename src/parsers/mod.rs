@@ -27,16 +27,18 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         }
     }
 
-    /// todo
+    /// It parses a bencoded value read from input and writes the corresponding
+    /// JSON value to the output.
     ///
     /// # Errors
     ///
-    ///
+    /// Will return an error if it can't read from the input or write to the
+    /// output.
     ///
     /// # Panics
     ///
-    /// Will panic if ...
-    #[allow(clippy::single_match)]
+    /// Will panic if receives a byte that isn't a valid begin or end of a
+    /// bencoded type: integer, string, list or dictionary.
     pub fn parse(&mut self) -> io::Result<()> {
         loop {
             let byte = match self.byte_reader.read_byte() {
