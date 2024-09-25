@@ -45,10 +45,27 @@ struct Length {
     number: usize,
 }
 
+impl Length {
+    fn add_byte(&mut self, byte: u8) {
+        // todo: should we fail here is the byte is not a digit (0..9)?
+        // or we can wait until we try to convert all bytes in the into a number?
+        self.bytes.push(byte);
+    }
+}
+
 #[derive(Default, Debug)]
 struct Value {
     bytes: Vec<u8>,
     bytes_counter: usize,
+}
+
+impl Value {
+    fn add_byte(&mut self, byte: u8) {
+        // todo: return an error if we try to push a new byte but the end of the
+        // string has been reached.
+        self.bytes.push(byte);
+        self.bytes_counter += 1;
+    }
 }
 
 impl StringParser {
@@ -72,7 +89,9 @@ impl StringParser {
         reader: &mut ByteReader<R>,
         initial_byte: u8,
     ) -> io::Result<()> {
-        self.add_length_byte(initial_byte);
+        // code-review: length can be calculated on the fly as the original C implementation.
+
+        self.length.add_byte(initial_byte);
 
         loop {
             let byte = match reader.read_byte() {
@@ -91,7 +110,7 @@ impl StringParser {
                     break;
                 }
                 _ => {
-                    self.add_length_byte(byte);
+                    self.length.add_byte(byte);
                 }
             }
         }
@@ -110,25 +129,12 @@ impl StringParser {
                 Err(err) => return Err(err),
             };
 
-            self.add_value_byte(byte);
+            self.value.add_byte(byte);
 
             // todo: escape '"' and '\\' with '\\';
         }
 
         Ok(())
-    }
-
-    fn add_length_byte(&mut self, byte: u8) {
-        // todo: should we fail here is the byte is not a digit (0..9)?
-        // or we can wait until we try to convert all bytes in the into a number?
-        self.length.bytes.push(byte);
-    }
-
-    fn add_value_byte(&mut self, byte: u8) {
-        // todo: return an error if we try to push a new byte but the end of the
-        // string has been reached.
-        self.value.bytes.push(byte);
-        self.value.bytes_counter += 1;
     }
 
     /// This function is called when we receive the ':' byte which is the
