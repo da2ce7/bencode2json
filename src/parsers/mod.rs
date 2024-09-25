@@ -17,6 +17,15 @@ pub struct BencodeParser<R: Read, W: Write> {
 }
 
 impl<R: Read, W: Write> BencodeParser<R, W> {
+    const JSON_ARRAY_BEGIN: u8 = b'[';
+    const JSON_ARRAY_ITEMS_SEPARATOR: u8 = b',';
+    const JSON_ARRAY_END: u8 = b']';
+
+    const JSON_OBJ_BEGIN: u8 = b'{';
+    const JSON_OBJ_FIELDS_SEPARATOR: u8 = b',';
+    const JSON_OBJ_FIELD_KEY_VALUE_SEPARATOR: u8 = b':';
+    const JSON_OBJ_END: u8 = b'}';
+
     pub fn new(reader: R, writer: W) -> Self {
         BencodeParser {
             debug: false, // todo: use tracing crate
@@ -70,14 +79,14 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'l' => {
                     // Begin of list
                     self.begin_bencoded_value()?;
-                    self.byte_writer.write_byte(b'[')?;
-                    self.stack.push(State::ExpectingFirstItemOrEnd);
+                    self.byte_writer.write_byte(Self::JSON_ARRAY_BEGIN)?;
+                    self.stack.push(State::ExpectingFirstListItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
                     self.begin_bencoded_value()?;
-                    self.byte_writer.write_byte(b'{')?;
-                    self.stack.push(State::ExpectingFirstFieldOrEnd);
+                    self.byte_writer.write_byte(Self::JSON_OBJ_BEGIN)?;
+                    self.stack.push(State::ExpectingFirstDictFieldOrEnd);
                 }
                 b'e' => {
                     // End of list or dictionary (not end of integer)
@@ -114,29 +123,26 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     /// Will return an error if the writer can't write to the output.
     pub fn begin_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
-            // Initial state
             State::Initial => {}
-            // List
-            State::ExpectingFirstItemOrEnd => {
-                self.stack.swap_top(State::ExpectingNextItem);
+            State::ExpectingFirstListItemOrEnd => {
+                self.stack.swap_top(State::ExpectingNextListItem);
             }
-            State::ExpectingNextItem => {
-                // Items separator
-                self.byte_writer.write_byte(b',')?;
+            State::ExpectingNextListItem => {
+                self.byte_writer
+                    .write_byte(Self::JSON_ARRAY_ITEMS_SEPARATOR)?;
             }
-            // Dictionary
-            State::ExpectingFirstFieldOrEnd => {
-                self.stack.swap_top(State::ExpectingFieldValue);
+            State::ExpectingFirstDictFieldOrEnd => {
+                self.stack.swap_top(State::ExpectingDictFieldValue);
             }
-            State::ExpectingFieldValue => {
-                // Key/Value separator
-                self.byte_writer.write_byte(b':')?;
-                self.stack.swap_top(State::ExpectingFieldKey);
+            State::ExpectingDictFieldValue => {
+                self.byte_writer
+                    .write_byte(Self::JSON_OBJ_FIELD_KEY_VALUE_SEPARATOR)?;
+                self.stack.swap_top(State::ExpectingDictFieldKey);
             }
-            State::ExpectingFieldKey => {
-                // Field separator
-                self.byte_writer.write_byte(b',')?;
-                self.stack.swap_top(State::ExpectingFieldValue);
+            State::ExpectingDictFieldKey => {
+                self.byte_writer
+                    .write_byte(Self::JSON_OBJ_FIELDS_SEPARATOR)?;
+                self.stack.swap_top(State::ExpectingDictFieldValue);
             }
         }
 
@@ -158,14 +164,14 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     /// expected.
     pub fn end_bencoded_value(&mut self) -> io::Result<()> {
         match self.stack.peek() {
-            State::ExpectingFirstItemOrEnd | State::ExpectingNextItem => {
-                self.byte_writer.write_byte(b']')?;
+            State::ExpectingFirstListItemOrEnd | State::ExpectingNextListItem => {
+                self.byte_writer.write_byte(Self::JSON_ARRAY_END)?;
                 self.stack.pop();
             }
-            State::ExpectingFirstFieldOrEnd | State::ExpectingFieldKey => {
-                self.byte_writer.write_byte(b'}')?;
+            State::ExpectingFirstDictFieldOrEnd | State::ExpectingDictFieldKey => {
+                self.byte_writer.write_byte(Self::JSON_OBJ_END)?;
             }
-            State::ExpectingFieldValue | State::Initial => {
+            State::ExpectingDictFieldValue | State::Initial => {
                 // todo: pass the type of value (list or dict) to customize the error message
                 panic!("error parsing end of list or dictionary, unexpected initial state on the stack")
             }

@@ -25,24 +25,24 @@ pub enum State {
     Initial, // I
 
     // States while parsing lists
-    ExpectingFirstItemOrEnd, // L
-    ExpectingNextItem,       // M
+    ExpectingFirstListItemOrEnd, // L
+    ExpectingNextListItem,       // M
 
     // States while parsing dictionaries
-    ExpectingFirstFieldOrEnd, // D
-    ExpectingFieldValue,      // E
-    ExpectingFieldKey,        // F
+    ExpectingFirstDictFieldOrEnd, // D
+    ExpectingDictFieldValue,      // E
+    ExpectingDictFieldKey,        // F
 }
 
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let output = match self {
             State::Initial => "I",
-            State::ExpectingFirstItemOrEnd => "L",
-            State::ExpectingNextItem => "M",
-            State::ExpectingFirstFieldOrEnd => "D",
-            State::ExpectingFieldValue => "E",
-            State::ExpectingFieldKey => "F",
+            State::ExpectingFirstListItemOrEnd => "L",
+            State::ExpectingNextListItem => "M",
+            State::ExpectingFirstDictFieldOrEnd => "D",
+            State::ExpectingDictFieldValue => "E",
+            State::ExpectingDictFieldKey => "F",
         };
         write!(f, "{output}")
     }
