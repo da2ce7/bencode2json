@@ -5,7 +5,12 @@ use std::io::{self, Read, Write};
 
 use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
-// todo: return errors instead of panicking in StringParser.
+/* todo:
+    - Return errors instead of panicking in StringParser.
+    - Optimize UTF-8 conversion. Try to convert to string partially or parts and
+      stop converting if we reach a point when input is not valid UTF-8 anymore.
+      This way we don't consume more memory.
+*/
 
 use core::str;
 
@@ -46,6 +51,13 @@ struct Length {
 }
 
 impl Length {
+    /* todo: conversion from bytes to number can be done progressively like the
+        C implementation:
+            0. We need a "temp_length" var.
+            1. Convert first digit and assign it to the var: temp_length = digit as number.
+            2. Convert next digit and increase temp_length: temp_length = temp_length * 10 + new_digit.
+    */
+
     fn add_byte(&mut self, byte: u8) {
         // todo: should we fail here is the byte is not a digit (0..9)?
         // or we can wait until we try to convert all bytes in the into a number?

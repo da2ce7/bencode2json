@@ -65,12 +65,12 @@ echo "4:spam" | ./be2json
 
 ## TODO
 
+- Return located errors with input and output positions and context.
 - Counter for number of items in a list for debugging and errors.
-- Return errors with position.
 - Use Property-Based Testing. Generate random valid bencoded values.
-- Refactor: Use only one tests with a data provider containing all cases.
 - Install tracing crate. Add verbose mode that enables debugging.
-- Option to  store the JSON and check if it's valid at the end of the process.
+- Option to check if the final JSON it's valid at the end of the process.
+- Benchmarking for this implementation anc the original C implementation.
 
 ## Alternatives
 
