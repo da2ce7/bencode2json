@@ -58,7 +58,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'i' => {
                     // Begin of integer
                     self.begin_bencoded_value()?;
-                    integer::parse(&mut self.byte_reader, &mut self.byte_writer)?;
+                    integer::parse(&mut self.byte_reader, &mut self.byte_writer, byte)?;
                 }
                 b'0'..=b'9' => {
                     // Begin of string
