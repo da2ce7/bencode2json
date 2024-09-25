@@ -240,12 +240,13 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 #[cfg(test)]
 mod tests {
 
-    use std::io;
-
     use super::BencodeParser;
 
-    fn to_json(bytes: &[u8]) -> String {
-        let mut parser = BencodeParser::new(bytes, Box::new(io::stdout()));
+    fn to_json(input_bytes: &[u8]) -> String {
+        let output_bytes = Vec::new();
+
+        let mut parser = BencodeParser::new(input_bytes, output_bytes);
+
         parser.parse().expect("bencoded to JSON conversion failed");
 
         match parser.opt_captured_output() {
