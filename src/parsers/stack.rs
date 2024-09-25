@@ -107,7 +107,7 @@ impl Stack {
 mod tests {
 
     mod it_should {
-        use crate::stack::{Stack, State};
+        use crate::parsers::stack::{Stack, State};
 
         #[test]
         fn have_an_initial_state() {

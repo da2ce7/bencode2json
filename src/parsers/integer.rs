@@ -1,6 +1,6 @@
 use std::io::{self, Read, Write};
 
-use crate::{byte_reader::ByteReader, byte_writer::ByteWriter};
+use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
 /// The current state parsing the integer.
 #[derive(PartialEq)]

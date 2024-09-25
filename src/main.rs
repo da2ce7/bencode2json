@@ -1,7 +1,7 @@
 use clap::{Arg, Command};
 use std::fs::File;
 use std::io::{self, Read, Write};
-use torrust_bencode2json::BencodeParser;
+use torrust_bencode2json::parsers::BencodeParser;
 
 fn main() -> io::Result<()> {
     let matches = Command::new("torrust-bencode2json")
