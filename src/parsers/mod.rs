@@ -242,10 +242,10 @@ mod tests {
 
     use super::BencodeParser;
 
-    fn to_json(input_bytes: &[u8]) -> String {
-        let output_bytes = Vec::new();
+    fn to_json(input_buffer: &[u8]) -> String {
+        let output_buffer = Vec::new();
 
-        let mut parser = BencodeParser::new(input_bytes, output_bytes);
+        let mut parser = BencodeParser::new(input_buffer, output_buffer);
 
         parser.parse().expect("bencoded to JSON conversion failed");
 
