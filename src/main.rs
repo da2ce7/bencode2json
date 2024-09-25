@@ -6,7 +6,7 @@ use torrust_bencode2json::parsers::BencodeParser;
 fn main() -> io::Result<()> {
     let matches = Command::new("torrust-bencode2json")
         .version("0.1.0")
-        .author("Your Name")
+        .author("Torrust Organization")
         .about("Converts Bencode to JSON")
         .arg(
             Arg::new("input")
@@ -38,9 +38,7 @@ fn main() -> io::Result<()> {
         Box::new(io::stdout())
     };
 
-    let mut parser = BencodeParser::new(input, output);
-
-    parser.parse()?;
+    BencodeParser::new(input, output).parse()?;
 
     Ok(())
 }
