@@ -5,7 +5,6 @@ pub mod string;
 use std::io::{self, Read, Write};
 
 use stack::{Stack, State};
-use string::StringParser;
 
 use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
 
@@ -59,12 +58,12 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
                 b'i' => {
                     // Begin of integer
                     self.begin_bencoded_value()?;
-                    self.parse_integer().expect("invalid integer");
+                    integer::parse(&mut self.byte_reader, &mut self.byte_writer)?;
                 }
                 b'0'..=b'9' => {
                     // Begin of string
                     self.begin_bencoded_value()?;
-                    self.parse_string(byte).expect("invalid string");
+                    string::parse(&mut self.byte_reader, &mut self.byte_writer, byte)?;
                 }
                 b'l' => {
                     // Begin of list
@@ -89,7 +88,6 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
 
             if self.debug {
                 println!("stack: {}", self.stack);
-                //println!("string_parser: {:#?}", self.string_parser);
                 self.byte_reader.print_captured_input();
                 self.byte_writer.print_captured_output();
                 println!();
@@ -171,63 +169,6 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             }
         }
         // todo: sp < stack. What this conditions does in the C implementation?
-
-        Ok(())
-    }
-
-    fn parse_integer(&mut self) -> io::Result<()> {
-        integer::parse(&mut self.byte_reader, &mut self.byte_writer)
-    }
-
-    fn parse_string(&mut self, byte: u8) -> io::Result<()> {
-        let mut string_parser = StringParser::default();
-
-        string_parser.new_string_starting_with(byte);
-
-        // Parse length
-
-        loop {
-            let byte = match self.byte_reader.read_byte() {
-                Ok(byte) => byte,
-                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                    //println!("Reached the end of file.");
-                    panic!("unexpected end of input parsing string length");
-                }
-                Err(err) => return Err(err),
-            };
-
-            match byte {
-                b':' => {
-                    // End of string length
-                    string_parser.process_end_of_string_length();
-                    break;
-                }
-                _ => {
-                    string_parser.add_length_byte(byte);
-                }
-            }
-        }
-
-        // Parse value
-
-        for _i in 1..=string_parser.string_length {
-            let byte = match self.byte_reader.read_byte() {
-                Ok(byte) => byte,
-                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                    //println!("Reached the end of file.");
-                    panic!("unexpected end of input parsing string chars");
-                }
-                Err(err) => return Err(err),
-            };
-
-            string_parser.add_byte(byte);
-
-            // todo: escape '"' and '\\' with '\\';
-        }
-
-        self.byte_writer.write_str(&string_parser.json())?;
-
-        //println!("string_parser {string_parser:#?}");
 
         Ok(())
     }

@@ -1,13 +1,87 @@
+//! Bencoded string parser.
+//!
+//! It reads bencoded bytes from the input and writes JSON bytes to the output.
+use std::io::{self, Read, Write};
+
+use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
+
 // todo: return errors instead of panicking in StringParser.
 
 use core::str;
 
+/// It parses a string bencoded value.
+///
+/// # Errors
+///
+/// Will return an error if it can't read from the input or write to the
+/// output.
+///
+/// # Panics
+///
+/// Will panic if we reach the end of the input without completing the string.
+pub fn parse<R: Read, W: Write>(
+    reader: &mut ByteReader<R>,
+    writer: &mut ByteWriter<W>,
+    byte: u8,
+) -> io::Result<()> {
+    let mut string_parser = StringParser::default();
+
+    string_parser.new_string_starting_with(byte);
+
+    // Parse length
+
+    loop {
+        let byte = match reader.read_byte() {
+            Ok(byte) => byte,
+            Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                //println!("Reached the end of file.");
+                panic!("unexpected end of input parsing string length");
+            }
+            Err(err) => return Err(err),
+        };
+
+        match byte {
+            b':' => {
+                // End of string length
+                string_parser.process_end_of_string_length();
+                break;
+            }
+            _ => {
+                string_parser.add_length_byte(byte);
+            }
+        }
+    }
+
+    // Parse value
+
+    for _i in 1..=string_parser.string_length {
+        let byte = match reader.read_byte() {
+            Ok(byte) => byte,
+            Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                //println!("Reached the end of file.");
+                panic!("unexpected end of input parsing string chars");
+            }
+            Err(err) => return Err(err),
+        };
+
+        string_parser.add_byte(byte);
+
+        // todo: escape '"' and '\\' with '\\';
+    }
+
+    writer.write_str(&string_parser.json())?;
+
+    //println!("string_parser {string_parser:#?}");
+
+    Ok(())
+}
+
 #[derive(Default, Debug)]
 #[allow(clippy::module_name_repetitions)]
-pub struct StringParser {
+struct StringParser {
     // String length
     bytes_for_string_length: Vec<u8>,
-    pub string_length: usize,
+    string_length: usize,
 
     // String value bytes
     string_bytes: Vec<u8>,

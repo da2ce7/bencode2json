@@ -1,3 +1,6 @@
+//! Bencoded integer parser.
+//!
+//! It reads bencoded bytes from the input and writes JSON bytes to the output.
 use std::io::{self, Read, Write};
 
 use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
