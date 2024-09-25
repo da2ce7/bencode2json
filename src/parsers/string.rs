@@ -41,7 +41,7 @@ struct StringParser {
 }
 
 impl StringParser {
-    pub fn parse<R: Read, W: Write>(
+    fn parse<R: Read, W: Write>(
         &mut self,
         reader: &mut ByteReader<R>,
         writer: &mut ByteWriter<W>,
@@ -56,7 +56,7 @@ impl StringParser {
         Ok(())
     }
 
-    pub fn parse_length<R: Read>(
+    fn parse_length<R: Read>(
         &mut self,
         reader: &mut ByteReader<R>,
         initial_byte: u8,
@@ -88,7 +88,7 @@ impl StringParser {
         Ok(())
     }
 
-    pub fn parse_value<R: Read>(&mut self, reader: &mut ByteReader<R>) -> io::Result<()> {
+    fn parse_value<R: Read>(&mut self, reader: &mut ByteReader<R>) -> io::Result<()> {
         for _i in 1..=self.string_length {
             let byte = match reader.read_byte() {
                 Ok(byte) => byte,
@@ -107,13 +107,13 @@ impl StringParser {
         Ok(())
     }
 
-    pub fn add_length_byte(&mut self, byte: u8) {
+    fn add_length_byte(&mut self, byte: u8) {
         // todo: should we fail here is the byte is not a digit (0..9)?
         // or we can wait until we try to convert all bytes in the into a number?
         self.bytes_for_string_length.push(byte);
     }
 
-    pub fn add_byte(&mut self, byte: u8) {
+    fn add_byte(&mut self, byte: u8) {
         // todo: return an error if we try to push a new byte but the end of the
         // string has been reached.
         self.string_bytes.push(byte);
@@ -127,7 +127,7 @@ impl StringParser {
     ///
     /// Will panic if the length bytes contain invalid UTF-8 chars or don't
     /// represent a valid zero or positive integer.
-    pub fn process_end_of_string_length(&mut self) {
+    fn process_end_of_string_length(&mut self) {
         // todo: maybe we should simply fail when we receive a byte that is not a digit (0..9).
         // This error cannot be understood by users because we first convert into a UTF-8 string
         // and later into a number.
@@ -157,7 +157,7 @@ impl StringParser {
     }
 
     #[must_use]
-    pub fn json(&self) -> String {
+    fn json(&self) -> String {
         format!("\"{}\"", self.utf8())
     }
 
