@@ -22,58 +22,10 @@ use core::str;
 pub fn parse<R: Read, W: Write>(
     reader: &mut ByteReader<R>,
     writer: &mut ByteWriter<W>,
-    byte: u8,
+    initial_byte: u8,
 ) -> io::Result<()> {
     let mut string_parser = StringParser::default();
-
-    string_parser.new_string_starting_with(byte);
-
-    // Parse length
-
-    loop {
-        let byte = match reader.read_byte() {
-            Ok(byte) => byte,
-            Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                //println!("Reached the end of file.");
-                panic!("unexpected end of input parsing string length");
-            }
-            Err(err) => return Err(err),
-        };
-
-        match byte {
-            b':' => {
-                // End of string length
-                string_parser.process_end_of_string_length();
-                break;
-            }
-            _ => {
-                string_parser.add_length_byte(byte);
-            }
-        }
-    }
-
-    // Parse value
-
-    for _i in 1..=string_parser.string_length {
-        let byte = match reader.read_byte() {
-            Ok(byte) => byte,
-            Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
-                //println!("Reached the end of file.");
-                panic!("unexpected end of input parsing string chars");
-            }
-            Err(err) => return Err(err),
-        };
-
-        string_parser.add_byte(byte);
-
-        // todo: escape '"' and '\\' with '\\';
-    }
-
-    writer.write_str(&string_parser.json())?;
-
-    //println!("string_parser {string_parser:#?}");
-
-    Ok(())
+    string_parser.parse(reader, writer, initial_byte)
 }
 
 #[derive(Default, Debug)]
@@ -89,9 +41,60 @@ struct StringParser {
 }
 
 impl StringParser {
-    pub fn new_string_starting_with(&mut self, byte: u8) {
-        self.new_string();
-        self.add_length_byte(byte);
+    pub fn parse<R: Read, W: Write>(
+        &mut self,
+        reader: &mut ByteReader<R>,
+        writer: &mut ByteWriter<W>,
+        initial_byte: u8,
+    ) -> io::Result<()> {
+        self.add_length_byte(initial_byte);
+
+        // Parse length
+
+        loop {
+            let byte = match reader.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the, byte end of file.");
+                    panic!("unexpected end of input parsing string length");
+                }
+                Err(err) => return Err(err),
+            };
+
+            match byte {
+                b':' => {
+                    // End of string length
+                    self.process_end_of_string_length();
+                    break;
+                }
+                _ => {
+                    self.add_length_byte(byte);
+                }
+            }
+        }
+
+        // Parse value
+
+        for _i in 1..=self.string_length {
+            let byte = match reader.read_byte() {
+                Ok(byte) => byte,
+                Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
+                    //println!("Reached the end of file.");
+                    panic!("unexpected end of input parsing string chars");
+                }
+                Err(err) => return Err(err),
+            };
+
+            self.add_byte(byte);
+
+            // todo: escape '"' and '\\' with '\\';
+        }
+
+        writer.write_str(&self.json())?;
+
+        //println!("string_parser {string_parser:#?}");
+
+        Ok(())
     }
 
     pub fn add_length_byte(&mut self, byte: u8) {
@@ -146,13 +149,6 @@ impl StringParser {
     #[must_use]
     pub fn json(&self) -> String {
         format!("\"{}\"", self.utf8())
-    }
-
-    fn new_string(&mut self) {
-        self.bytes_for_string_length = Vec::new();
-        self.string_length = 0;
-        self.string_bytes = Vec::new();
-        self.string_bytes_counter = 0;
     }
 
     fn bytes_to_hex(data: &[u8]) -> String {

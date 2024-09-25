@@ -28,7 +28,7 @@ enum StateExpecting {
 pub fn parse<R: Read, W: Write>(
     reader: &mut ByteReader<R>,
     writer: &mut ByteWriter<W>,
-    _byte: u8,
+    _initial_byte: u8,
 ) -> io::Result<()> {
     let mut state = StateExpecting::DigitOrSign;
 
