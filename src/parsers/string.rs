@@ -28,16 +28,27 @@ pub fn parse<R: Read, W: Write>(
     string_parser.parse(reader, writer, initial_byte)
 }
 
+/// Strings bencode format have two parts: `length:value`.
+///
+/// - Length is a sequence of bytes (only digits 0..9).
+/// - Value is an arbitrary sequence of bytes (not only valid UTF-8).
 #[derive(Default, Debug)]
 #[allow(clippy::module_name_repetitions)]
 struct StringParser {
-    // String length
-    bytes_for_string_length: Vec<u8>,
-    string_length: usize,
+    length: Length,
+    value: Value,
+}
 
-    // String value bytes
-    string_bytes: Vec<u8>,
-    string_bytes_counter: usize,
+#[derive(Default, Debug)]
+struct Length {
+    bytes: Vec<u8>,
+    number: usize,
+}
+
+#[derive(Default, Debug)]
+struct Value {
+    bytes: Vec<u8>,
+    bytes_counter: usize,
 }
 
 impl StringParser {
@@ -89,7 +100,7 @@ impl StringParser {
     }
 
     fn parse_value<R: Read>(&mut self, reader: &mut ByteReader<R>) -> io::Result<()> {
-        for _i in 1..=self.string_length {
+        for _i in 1..=self.length.number {
             let byte = match reader.read_byte() {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
@@ -99,7 +110,7 @@ impl StringParser {
                 Err(err) => return Err(err),
             };
 
-            self.add_byte(byte);
+            self.add_value_byte(byte);
 
             // todo: escape '"' and '\\' with '\\';
         }
@@ -110,14 +121,14 @@ impl StringParser {
     fn add_length_byte(&mut self, byte: u8) {
         // todo: should we fail here is the byte is not a digit (0..9)?
         // or we can wait until we try to convert all bytes in the into a number?
-        self.bytes_for_string_length.push(byte);
+        self.length.bytes.push(byte);
     }
 
-    fn add_byte(&mut self, byte: u8) {
+    fn add_value_byte(&mut self, byte: u8) {
         // todo: return an error if we try to push a new byte but the end of the
         // string has been reached.
-        self.string_bytes.push(byte);
-        self.string_bytes_counter += 1;
+        self.value.bytes.push(byte);
+        self.value.bytes_counter += 1;
     }
 
     /// This function is called when we receive the ':' byte which is the
@@ -131,27 +142,23 @@ impl StringParser {
         // todo: maybe we should simply fail when we receive a byte that is not a digit (0..9).
         // This error cannot be understood by users because we first convert into a UTF-8 string
         // and later into a number.
-        let length_str = str::from_utf8(&self.bytes_for_string_length)
+        let length_str = str::from_utf8(&self.length.bytes)
             .expect("invalid string length, non UTF-8 string length");
 
-        //println!("length_str: {length_str}");
-
-        self.string_length = length_str
+        self.length.number = length_str
             .parse::<usize>()
             .expect("invalid string length, non zero or positive integer");
-
-        //println!("string_length_number: {string_length}");
     }
 
     fn utf8(&self) -> String {
-        match str::from_utf8(&self.string_bytes) {
+        match str::from_utf8(&self.value.bytes) {
             Ok(string) => {
                 // String only contains valid UTF-8 chars -> print it as it's
                 string.to_owned()
             }
             Err(_) => {
                 // String contains non valid UTF-8 chars -> print it as hex bytes
-                Self::bytes_to_hex(&self.string_bytes)
+                Self::bytes_to_hex(&self.value.bytes)
             }
         }
     }
