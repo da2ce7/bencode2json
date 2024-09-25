@@ -47,9 +47,21 @@ impl StringParser {
         writer: &mut ByteWriter<W>,
         initial_byte: u8,
     ) -> io::Result<()> {
-        self.add_length_byte(initial_byte);
+        self.parse_length(reader, initial_byte)?;
 
-        // Parse length
+        self.parse_value(reader)?;
+
+        writer.write_str(&self.json())?;
+
+        Ok(())
+    }
+
+    pub fn parse_length<R: Read>(
+        &mut self,
+        reader: &mut ByteReader<R>,
+        initial_byte: u8,
+    ) -> io::Result<()> {
+        self.add_length_byte(initial_byte);
 
         loop {
             let byte = match reader.read_byte() {
@@ -73,8 +85,10 @@ impl StringParser {
             }
         }
 
-        // Parse value
+        Ok(())
+    }
 
+    pub fn parse_value<R: Read>(&mut self, reader: &mut ByteReader<R>) -> io::Result<()> {
         for _i in 1..=self.string_length {
             let byte = match reader.read_byte() {
                 Ok(byte) => byte,
@@ -89,10 +103,6 @@ impl StringParser {
 
             // todo: escape '"' and '\\' with '\\';
         }
-
-        writer.write_str(&self.json())?;
-
-        //println!("string_parser {string_parser:#?}");
 
         Ok(())
     }
