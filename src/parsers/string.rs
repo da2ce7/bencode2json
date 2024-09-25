@@ -51,6 +51,27 @@ impl Length {
         // or we can wait until we try to convert all bytes in the into a number?
         self.bytes.push(byte);
     }
+
+    /// This function convert the current bytes representing the length to a
+    /// number.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if the length bytes contain invalid UTF-8 chars or don't
+    /// represent a valid zero or positive integer.
+    fn convert_to_number(&mut self) -> usize {
+        // todo: maybe we should simply fail when we receive a byte that is not a digit (0..9).
+        // This error cannot be understood by users because we first convert into a UTF-8 string
+        // and later into a number.
+        let length_str =
+            str::from_utf8(&self.bytes).expect("invalid string length, non UTF-8 string length");
+
+        self.number = length_str
+            .parse::<usize>()
+            .expect("invalid string length, non zero or positive integer");
+
+        self.number
+    }
 }
 
 #[derive(Default, Debug)]
@@ -65,6 +86,23 @@ impl Value {
         // string has been reached.
         self.bytes.push(byte);
         self.bytes_counter += 1;
+    }
+
+    fn utf8(&self) -> String {
+        match str::from_utf8(&self.bytes) {
+            Ok(string) => {
+                // String only contains valid UTF-8 chars -> print it as it's
+                string.to_owned()
+            }
+            Err(_) => {
+                // String contains non valid UTF-8 chars -> print it as hex bytes
+                Self::bytes_to_hex(&self.bytes)
+            }
+        }
+    }
+
+    fn bytes_to_hex(data: &[u8]) -> String {
+        format!("<hex>{}</hex>", hex::encode(data))
     }
 }
 
@@ -124,7 +162,7 @@ impl StringParser {
                 Ok(byte) => byte,
                 Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => {
                     //println!("Reached the end of file.");
-                    panic!("unexpected end of input parsing string chars");
+                    panic!("unexpected end of input parsing string value");
                 }
                 Err(err) => return Err(err),
             };
@@ -139,42 +177,16 @@ impl StringParser {
 
     /// This function is called when we receive the ':' byte which is the
     /// delimiter for the end of bytes representing the string length.
-    ///
-    /// # Panics
-    ///
-    /// Will panic if the length bytes contain invalid UTF-8 chars or don't
-    /// represent a valid zero or positive integer.
-    fn process_end_of_string_length(&mut self) {
-        // todo: maybe we should simply fail when we receive a byte that is not a digit (0..9).
-        // This error cannot be understood by users because we first convert into a UTF-8 string
-        // and later into a number.
-        let length_str = str::from_utf8(&self.length.bytes)
-            .expect("invalid string length, non UTF-8 string length");
-
-        self.length.number = length_str
-            .parse::<usize>()
-            .expect("invalid string length, non zero or positive integer");
+    fn process_end_of_string_length(&mut self) -> usize {
+        self.length.convert_to_number()
     }
 
     fn utf8(&self) -> String {
-        match str::from_utf8(&self.value.bytes) {
-            Ok(string) => {
-                // String only contains valid UTF-8 chars -> print it as it's
-                string.to_owned()
-            }
-            Err(_) => {
-                // String contains non valid UTF-8 chars -> print it as hex bytes
-                Self::bytes_to_hex(&self.value.bytes)
-            }
-        }
+        self.value.utf8()
     }
 
     #[must_use]
     fn json(&self) -> String {
         format!("\"{}\"", self.utf8())
-    }
-
-    fn bytes_to_hex(data: &[u8]) -> String {
-        format!("<hex>{}</hex>", hex::encode(data))
     }
 }
