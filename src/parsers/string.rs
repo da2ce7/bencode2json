@@ -145,6 +145,7 @@ impl StringParser {
                 b':' => {
                     // End of string length
                     self.process_end_of_string_length();
+                    self.length.convert_to_number();
                     break;
                 }
                 _ => {
