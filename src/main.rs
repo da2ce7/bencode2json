@@ -32,13 +32,14 @@ fn main() -> io::Result<()> {
     };
 
     // Handle output stream (file or stdout)
-    let output: Box<dyn Write> = if let Some(output_path) = matches.get_one::<String>("output") {
+    let mut output: Box<dyn Write> = if let Some(output_path) = matches.get_one::<String>("output")
+    {
         Box::new(File::create(output_path)?)
     } else {
         Box::new(io::stdout())
     };
 
-    BencodeParser::new(input, output).parse()?;
+    BencodeParser::new(input, &mut output).parse()?;
 
     Ok(())
 }

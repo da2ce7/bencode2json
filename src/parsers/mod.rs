@@ -192,18 +192,13 @@ mod tests {
     use super::BencodeParser;
 
     fn to_json(input_buffer: &[u8]) -> String {
-        let output_buffer = Vec::new();
+        let mut output_buffer = Vec::new();
 
-        let mut parser = BencodeParser::new(input_buffer, output_buffer);
+        let mut parser = BencodeParser::new(input_buffer, &mut output_buffer);
 
-        parser.parse().expect("bencoded to JSON conversion failed");
+        parser.parse().expect("Bencode to JSON conversion failed");
 
-        match parser.opt_captured_output() {
-            Some(captured_output) => captured_output,
-            None => panic!(
-                "capturing output is not enabled in parser, please enable it to run the tests"
-            ),
-        }
+        String::from_utf8_lossy(&output_buffer).to_string()
     }
 
     mod integers {
