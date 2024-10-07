@@ -1,9 +1,9 @@
 //! Bencoded string parser.
 //!
 //! It reads bencoded bytes from the input and writes JSON bytes to the output.
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
-use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
+use crate::io::{byte_reader::ByteReader, writer::Writer};
 
 /* todo:
     - Return errors instead of panicking in StringParser.
@@ -24,9 +24,9 @@ use core::str;
 /// # Panics
 ///
 /// Will panic if we reach the end of the input without completing the string.
-pub fn parse<R: Read, W: Write>(
+pub fn parse<R: Read, W: Writer>(
     reader: &mut ByteReader<R>,
-    writer: &mut ByteWriter<W>,
+    writer: &mut W,
     initial_byte: u8,
 ) -> io::Result<()> {
     let mut string_parser = StringParser::default();
@@ -119,10 +119,10 @@ impl Value {
 }
 
 impl StringParser {
-    fn parse<R: Read, W: Write>(
+    fn parse<R: Read, W: Writer>(
         &mut self,
         reader: &mut ByteReader<R>,
-        writer: &mut ByteWriter<W>,
+        writer: &mut W,
         initial_byte: u8,
     ) -> io::Result<()> {
         self.parse_length(reader, initial_byte)?;

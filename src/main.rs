@@ -39,7 +39,7 @@ fn main() -> io::Result<()> {
         Box::new(io::stdout())
     };
 
-    BencodeParser::new(input, &mut output).parse()?;
+    BencodeParser::new(input).write_bytes(&mut output)?;
 
     Ok(())
 }

@@ -1,9 +1,9 @@
 //! Bencoded integer parser.
 //!
 //! It reads bencoded bytes from the input and writes JSON bytes to the output.
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
-use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
+use crate::io::{byte_reader::ByteReader, writer::Writer};
 
 // code-review: state machine to check state transitions (runtime or compile time)?
 
@@ -27,9 +27,9 @@ enum StateExpecting {
 ///
 /// Will panic if we reach the end of the input without completing the integer
 /// (without reaching the end of the integer `e`).
-pub fn parse<R: Read, W: Write>(
+pub fn parse<R: Read, W: Writer>(
     reader: &mut ByteReader<R>,
-    writer: &mut ByteWriter<W>,
+    writer: &mut W,
     _initial_byte: u8,
 ) -> io::Result<()> {
     let mut state = StateExpecting::DigitOrSign;

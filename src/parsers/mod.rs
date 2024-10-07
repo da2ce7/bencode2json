@@ -6,17 +6,16 @@ use std::io::{self, Read, Write};
 
 use stack::{Stack, State};
 
-use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter};
+use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter, writer::Writer};
 
-pub struct BencodeParser<R: Read, W: Write> {
+pub struct BencodeParser<R: Read> {
     pub debug: bool,
     pub iter: u64,
     byte_reader: ByteReader<R>,
-    byte_writer: ByteWriter<W>,
     stack: Stack,
 }
 
-impl<R: Read, W: Write> BencodeParser<R, W> {
+impl<R: Read> BencodeParser<R> {
     const JSON_ARRAY_BEGIN: u8 = b'[';
     const JSON_ARRAY_ITEMS_SEPARATOR: u8 = b',';
     const JSON_ARRAY_END: u8 = b']';
@@ -26,12 +25,11 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     const JSON_OBJ_FIELD_KEY_VALUE_SEPARATOR: u8 = b':';
     const JSON_OBJ_END: u8 = b'}';
 
-    pub fn new(reader: R, writer: W) -> Self {
+    pub fn new(reader: R) -> Self {
         BencodeParser {
             debug: false, // todo: use tracing crate
             iter: 1,
             byte_reader: ByteReader::new(reader),
-            byte_writer: ByteWriter::new(writer),
             stack: Stack::default(),
         }
     }
@@ -48,7 +46,24 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     ///
     /// Will panic if receives a byte that isn't a valid begin or end of a
     /// bencoded type: integer, string, list or dictionary.
-    pub fn parse(&mut self) -> io::Result<()> {
+    pub fn write_bytes<W: Write>(&mut self, writer: W) -> io::Result<()> {
+        let mut writer = ByteWriter::new(writer);
+        self.parse(&mut writer)
+    }
+
+    /// It parses a bencoded value read from input and writes the corresponding
+    /// JSON value to the output.
+    ///
+    /// # Errors
+    ///
+    /// Will return an error if it can't read from the input or write to the
+    /// output.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if receives a byte that isn't a valid begin or end of a
+    /// bencoded type: integer, string, list or dictionary.
+    fn parse<W: Writer>(&mut self, writer: &mut W) -> io::Result<()> {
         loop {
             let byte = match self.byte_reader.read_byte() {
                 Ok(byte) => byte,
@@ -68,29 +83,29 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             match byte {
                 b'i' => {
                     // Begin of integer
-                    self.begin_bencoded_value()?;
-                    integer::parse(&mut self.byte_reader, &mut self.byte_writer, byte)?;
+                    self.begin_bencoded_value(writer)?;
+                    integer::parse(&mut self.byte_reader, writer, byte)?;
                 }
                 b'0'..=b'9' => {
                     // Begin of string
-                    self.begin_bencoded_value()?;
-                    string::parse(&mut self.byte_reader, &mut self.byte_writer, byte)?;
+                    self.begin_bencoded_value(writer)?;
+                    string::parse(&mut self.byte_reader, writer, byte)?;
                 }
                 b'l' => {
                     // Begin of list
-                    self.begin_bencoded_value()?;
-                    self.byte_writer.write_byte(Self::JSON_ARRAY_BEGIN)?;
+                    self.begin_bencoded_value(writer)?;
+                    writer.write_byte(Self::JSON_ARRAY_BEGIN)?;
                     self.stack.push(State::ExpectingFirstListItemOrEnd);
                 }
                 b'd' => {
                     // Begin of dictionary
-                    self.begin_bencoded_value()?;
-                    self.byte_writer.write_byte(Self::JSON_OBJ_BEGIN)?;
+                    self.begin_bencoded_value(writer)?;
+                    writer.write_byte(Self::JSON_OBJ_BEGIN)?;
                     self.stack.push(State::ExpectingFirstDictFieldOrEnd);
                 }
                 b'e' => {
                     // End of list or dictionary (not end of integer)
-                    self.end_bencoded_value()?;
+                    self.end_bencoded_value(writer)?;
                 }
                 _ => {
                     panic!("{}", format!("unexpected byte {} ({})", byte, byte as char));
@@ -100,7 +115,7 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
             if self.debug {
                 println!("stack: {}", self.stack);
                 self.byte_reader.print_captured_input();
-                self.byte_writer.print_captured_output();
+                writer.print_captured_output();
                 println!();
             }
 
@@ -121,27 +136,24 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     /// # Errors
     ///
     /// Will return an error if the writer can't write to the output.
-    pub fn begin_bencoded_value(&mut self) -> io::Result<()> {
+    pub fn begin_bencoded_value<W: Writer>(&mut self, writer: &mut W) -> io::Result<()> {
         match self.stack.peek() {
             State::Initial => {}
             State::ExpectingFirstListItemOrEnd => {
                 self.stack.swap_top(State::ExpectingNextListItem);
             }
             State::ExpectingNextListItem => {
-                self.byte_writer
-                    .write_byte(Self::JSON_ARRAY_ITEMS_SEPARATOR)?;
+                writer.write_byte(Self::JSON_ARRAY_ITEMS_SEPARATOR)?;
             }
             State::ExpectingFirstDictFieldOrEnd => {
                 self.stack.swap_top(State::ExpectingDictFieldValue);
             }
             State::ExpectingDictFieldValue => {
-                self.byte_writer
-                    .write_byte(Self::JSON_OBJ_FIELD_KEY_VALUE_SEPARATOR)?;
+                writer.write_byte(Self::JSON_OBJ_FIELD_KEY_VALUE_SEPARATOR)?;
                 self.stack.swap_top(State::ExpectingDictFieldKey);
             }
             State::ExpectingDictFieldKey => {
-                self.byte_writer
-                    .write_byte(Self::JSON_OBJ_FIELDS_SEPARATOR)?;
+                writer.write_byte(Self::JSON_OBJ_FIELDS_SEPARATOR)?;
                 self.stack.swap_top(State::ExpectingDictFieldValue);
             }
         }
@@ -162,14 +174,14 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
     ///
     /// Will panic if the end of bencoded value (list or dictionary) was not
     /// expected.
-    pub fn end_bencoded_value(&mut self) -> io::Result<()> {
+    pub fn end_bencoded_value<W: Writer>(&mut self, writer: &mut W) -> io::Result<()> {
         match self.stack.peek() {
             State::ExpectingFirstListItemOrEnd | State::ExpectingNextListItem => {
-                self.byte_writer.write_byte(Self::JSON_ARRAY_END)?;
+                writer.write_byte(Self::JSON_ARRAY_END)?;
                 self.stack.pop();
             }
             State::ExpectingFirstDictFieldOrEnd | State::ExpectingDictFieldKey => {
-                self.byte_writer.write_byte(Self::JSON_OBJ_END)?;
+                writer.write_byte(Self::JSON_OBJ_END)?;
             }
             State::ExpectingDictFieldValue | State::Initial => {
                 // todo: pass the type of value (list or dict) to customize the error message
@@ -181,8 +193,8 @@ impl<R: Read, W: Write> BencodeParser<R, W> {
         Ok(())
     }
 
-    pub fn opt_captured_output(&self) -> Option<String> {
-        self.byte_writer.opt_captured_output.clone()
+    pub fn opt_captured_output<W: Writer>(&self, writer: &mut W) -> Option<String> {
+        writer.get_captured_output()
     }
 }
 
@@ -194,9 +206,11 @@ mod tests {
     fn to_json(input_buffer: &[u8]) -> String {
         let mut output_buffer = Vec::new();
 
-        let mut parser = BencodeParser::new(input_buffer, &mut output_buffer);
+        let mut parser = BencodeParser::new(input_buffer);
 
-        parser.parse().expect("Bencode to JSON conversion failed");
+        parser
+            .write_bytes(&mut output_buffer)
+            .expect("Bencode to JSON conversion failed");
 
         String::from_utf8_lossy(&output_buffer).to_string()
     }
