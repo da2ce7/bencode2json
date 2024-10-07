@@ -1,5 +1,7 @@
 use core::str;
-use std::fmt::{self, Write};
+use std::{fmt::Write, io};
+
+use super::writer::Writer;
 
 /// A writer that writes chars to an output.
 ///
@@ -22,14 +24,13 @@ impl<W: Write> CharWriter<W> {
             writer,
         }
     }
+}
 
-    /// It writes one byte to the output (stdout or file).
-    ///
-    /// # Errors
-    ///
-    /// Will return an error if it can't write the byte to the output.
-    pub fn write_char(&mut self, c: char) -> fmt::Result {
-        self.writer.write_char(c)?;
+impl<W: Write> Writer for CharWriter<W> {
+    fn write_byte(&mut self, byte: u8) -> io::Result<()> {
+        let c = byte as char;
+
+        self.writer.write_char(c).expect("error writing str");
 
         self.output_char_counter += 1;
 
@@ -40,13 +41,8 @@ impl<W: Write> CharWriter<W> {
         Ok(())
     }
 
-    /// It writes a string to the output (stdout or file).
-    ///
-    /// # Errors
-    ///
-    /// Will return an error if it can't write the string (as bytes) to the output.
-    pub fn write_str(&mut self, value: &str) -> fmt::Result {
-        self.writer.write_str(value)?;
+    fn write_str(&mut self, value: &str) -> io::Result<()> {
+        self.writer.write_str(value).expect("error writing str");
 
         self.output_char_counter += value.len() as u64;
 
@@ -57,8 +53,14 @@ impl<W: Write> CharWriter<W> {
         Ok(())
     }
 
-    /// It prints the captured output is enabled.
-    pub fn print_captured_output(&self) {
+    fn get_captured_output(&mut self) -> Option<String> {
+        match &self.opt_captured_output {
+            Some(output) => Some(output.to_string()),
+            None => todo!(),
+        }
+    }
+
+    fn print_captured_output(&self) {
         if let Some(output) = &self.opt_captured_output {
             println!("output: {output}");
         }

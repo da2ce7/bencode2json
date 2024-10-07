@@ -2,11 +2,16 @@ pub mod integer;
 pub mod stack;
 pub mod string;
 
-use std::io::{self, Read, Write};
+use std::{
+    fmt::Write as FmtWrite,
+    io::{self, Read, Write as IoWrite},
+};
 
 use stack::{Stack, State};
 
-use crate::io::{byte_reader::ByteReader, byte_writer::ByteWriter, writer::Writer};
+use crate::io::{
+    byte_reader::ByteReader, byte_writer::ByteWriter, char_writer::CharWriter, writer::Writer,
+};
 
 pub struct BencodeParser<R: Read> {
     pub debug: bool,
@@ -46,8 +51,25 @@ impl<R: Read> BencodeParser<R> {
     ///
     /// Will panic if receives a byte that isn't a valid begin or end of a
     /// bencoded type: integer, string, list or dictionary.
-    pub fn write_bytes<W: Write>(&mut self, writer: W) -> io::Result<()> {
+    pub fn write_bytes<W: IoWrite>(&mut self, writer: W) -> io::Result<()> {
         let mut writer = ByteWriter::new(writer);
+        self.parse(&mut writer)
+    }
+
+    /// It parses a bencoded value read from input and writes the corresponding
+    /// JSON value to the output.
+    ///
+    /// # Errors
+    ///
+    /// Will return an error if it can't read from the input or write to the
+    /// output.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if receives a byte that isn't a valid begin or end of a
+    /// bencoded type: integer, string, list or dictionary.
+    pub fn write_str<W: FmtWrite>(&mut self, writer: W) -> io::Result<()> {
+        let mut writer = CharWriter::new(writer);
         self.parse(&mut writer)
     }
 
@@ -203,16 +225,42 @@ mod tests {
 
     use super::BencodeParser;
 
+    #[test]
+    fn it_should_allow_writing_to_a_byte_vector() {
+        let mut output = Vec::new();
+
+        let mut parser = BencodeParser::new(&b"i0e"[..]);
+
+        parser
+            .write_bytes(&mut output)
+            .expect("Bencode to JSON conversion failed");
+
+        assert_eq!(output, vec!(48));
+    }
+
+    #[test]
+    fn it_should_allow_writing_to_a_string() {
+        let mut output = String::new();
+
+        let mut parser = BencodeParser::new(&b"i0e"[..]);
+
+        parser
+            .write_str(&mut output)
+            .expect("Bencode to JSON conversion failed");
+
+        assert_eq!(output, "0".to_string());
+    }
+
     fn to_json(input_buffer: &[u8]) -> String {
-        let mut output_buffer = Vec::new();
+        let mut output = String::new();
 
         let mut parser = BencodeParser::new(input_buffer);
 
         parser
-            .write_bytes(&mut output_buffer)
+            .write_str(&mut output)
             .expect("Bencode to JSON conversion failed");
 
-        String::from_utf8_lossy(&output_buffer).to_string()
+        output
     }
 
     mod integers {
