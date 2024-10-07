@@ -6,9 +6,9 @@ use super::writer::Writer;
 /// A writer that writes chars to an output.
 ///
 /// It's wrapper of a basic writer with extra functionality.
-pub struct CharWriter<W: Write> {
+pub struct StringWriter<W: Write> {
     /// Number of bytes write to the output.
-    pub output_char_counter: u64,
+    pub output_string_length: u64,
 
     /// It optionally captures the output.
     pub opt_captured_output: Option<String>,
@@ -16,23 +16,23 @@ pub struct CharWriter<W: Write> {
     writer: W,
 }
 
-impl<W: Write> CharWriter<W> {
+impl<W: Write> StringWriter<W> {
     pub fn new(writer: W) -> Self {
         Self {
-            output_char_counter: 0,
+            output_string_length: 0,
             opt_captured_output: Some(String::new()),
             writer,
         }
     }
 }
 
-impl<W: Write> Writer for CharWriter<W> {
+impl<W: Write> Writer for StringWriter<W> {
     fn write_byte(&mut self, byte: u8) -> io::Result<()> {
         let c = byte as char;
 
         self.writer.write_char(c).expect("error writing str");
 
-        self.output_char_counter += 1;
+        self.output_string_length += 1;
 
         if let Some(ref mut captured_output) = self.opt_captured_output {
             captured_output.push(c);
@@ -44,7 +44,7 @@ impl<W: Write> Writer for CharWriter<W> {
     fn write_str(&mut self, value: &str) -> io::Result<()> {
         self.writer.write_str(value).expect("error writing str");
 
-        self.output_char_counter += value.len() as u64;
+        self.output_string_length += value.len() as u64;
 
         if let Some(ref mut captured_output) = self.opt_captured_output {
             captured_output.push_str(value);

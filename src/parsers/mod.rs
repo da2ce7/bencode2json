@@ -10,7 +10,7 @@ use std::{
 use stack::{Stack, State};
 
 use crate::io::{
-    byte_reader::ByteReader, byte_writer::ByteWriter, char_writer::CharWriter, writer::Writer,
+    byte_reader::ByteReader, byte_writer::ByteWriter, string_writer::StringWriter, writer::Writer,
 };
 
 pub struct BencodeParser<R: Read> {
@@ -69,7 +69,7 @@ impl<R: Read> BencodeParser<R> {
     /// Will panic if receives a byte that isn't a valid begin or end of a
     /// bencoded type: integer, string, list or dictionary.
     pub fn write_str<W: FmtWrite>(&mut self, writer: W) -> io::Result<()> {
-        let mut writer = CharWriter::new(writer);
+        let mut writer = StringWriter::new(writer);
         self.parse(&mut writer)
     }
 
